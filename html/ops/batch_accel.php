@@ -56,6 +56,11 @@ function do_batch($batch, $wus) {
                 'id, server_state, sent_time, priority',
                 "workunitid=$wu->id"
             );
+
+            // create a new (high priority) result if
+            // - we're not at the max # of result
+            // - there are no unsent or recently sent results
+            //
             $make_another_result = false;
             if (count($results) < $wu->max_total_results) {
                 $make_another_result = true;
@@ -74,7 +79,7 @@ function do_batch($batch, $wus) {
                     case RESULT_SERVER_STATE_IN_PROGRESS:
                         $age = $now - $r->sent_time;
                         if ($age<$batch->expire_time) {
-                            echo "   have recent in-progress result\n";
+                            echo "   have recent in-progress result $r->id\n";
                             $make_another_result = false;
                         }
                         break;
@@ -86,6 +91,9 @@ function do_batch($batch, $wus) {
                 echo "   creating another instance\n";
                 $query[] = sprintf(
                     'target_nresults=%d', $wu->target_nresults+1
+                );
+                $query[] = sprintf(
+                    'max_total_results=%d', $wu->max_total_results+1
                 );
                 $query[] = sprintf(
                     'transition_time=%f', $now
