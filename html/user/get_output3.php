@@ -35,8 +35,14 @@
 require_once("../inc/util.inc");
 require_once("../inc/submit_util.inc");
 
+// user is allowed to download output files from batch only if
+// they own batch or have manage-all permissions
+//
 function check_auth($batch_id){
     $user = get_logged_in_user();
+    if (has_manage_access($user, 0)) {
+        return;
+    }
     $batch = BoincBatch::lookup_id($batch_id);
     if (!$batch || $user->id != $batch->user_id) {
         error_page('not owner');
@@ -99,14 +105,36 @@ function get_batch_tar() {
     if (!is_dir($dir)) {
         die('no batch dir');
     }
-    $name = "batch_$batch_id.tar";
-    $cmd = "cd $dir; rm -f $name; tar -cf $name *";
-    $line = system($cmd, $ret);
-    if ($ret) {
-        error_page("Tar failed: $line");
+
+    // get the size of the tar file (fast - doesn't read files)
+    //
+    $cmd = "cd $dir; tar --totals -cf /dev/null * 2>&1";
+    $f = popen($cmd, "r");
+    while (1) {
+        $out = fgets($f);
+        if (!$out) break;
+        $x = sscanf($out, "Total bytes written: %d");
+        if (count($x)) {
+            $nbytes = $x[0];
+            break;
+        }
     }
-    do_download("$dir/$name");
-    unlink("$dir/$name");
+    pclose($f);
+
+    // generate tar file and stream to output
+    //
+    $name = "batch_$batch_id.tar";
+    download_header($name, $nbytes);
+    $cmd = " cd $dir; tar -cf - *";
+    $f = popen($cmd, "r");
+    while (1) {
+        $data = fread($f, 256*1024);
+        if (!$data) {
+            break;
+        }
+        echo $data;
+        flush();
+    }
 }
 
 $action = get_str('action');
