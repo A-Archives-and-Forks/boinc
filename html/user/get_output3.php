@@ -110,6 +110,9 @@ function get_batch_tar() {
     //
     $cmd = "cd $dir; tar --totals -cf /dev/null * 2>&1";
     $f = popen($cmd, "r");
+    if (!$f) {
+        error_page('tar --totals failed');
+    }
     $nbytes = -1;
     while (1) {
         $out = fgets($f);
@@ -121,7 +124,7 @@ function get_batch_tar() {
         }
     }
     if ($nbytes<0) {
-        error_page('tar --totals failed');
+        error_page('tar --totals didn't produce result');
     }
     pclose($f);
 
@@ -129,8 +132,11 @@ function get_batch_tar() {
     //
     $name = "batch_$batch_id.tar";
     download_header($name, $nbytes);
-    $cmd = " cd $dir; tar -cf - *";
+    $cmd = "cd $dir; tar -cf - *";
     $f = popen($cmd, "r");
+    if (!$f) {
+        error_page('tar failed');
+    }
     while (1) {
         $data = fread($f, 256*1024);
         if (!$data) {
