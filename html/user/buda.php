@@ -33,7 +33,7 @@ display_errors();
 
 $buda_root = "../../buda_apps";
 
-// job parameters; can override in project.inc
+// job parameters; can override in project.inc (include that first)
 
 if (!defined('MIN_QUORUM')) {
     define('MIN_QUORUM', 1);
@@ -49,6 +49,12 @@ if (!defined('MAX_TOTAL_RESULTS')) {
 }
 if (!defined('MAX_SUCCESS_RESULTS')) {
     define('MAX_SUCCESS_RESULTS', 3);
+}
+
+if (MIN_QUORUM > TARGET_NRESULTS
+    || TARGET_NRESULTS > MAX_TOTAL_RESULTS
+) {
+    error_page("bad job parameters");
 }
 
 // show list of BUDA apps and variants,
