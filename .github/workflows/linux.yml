@@ -77,7 +77,7 @@ jobs:
       - name: Ignore mirrors when building arm64 or armhf
         if: success() && (endsWith(matrix.type, 'arm64') || endsWith(matrix.type, 'armhf'))
         run: |
-          sudo sed -i 's|priority:1|priority:100|' /etc/apt/apt-mirrors.txt
+          sudo sed -i '/azure/d' /etc/apt/apt-mirrors.txt
 
       - name: Install dependencies
         if: matrix.type != 'coverity' || (github.ref == 'refs/heads/master' && github.event_name == 'schedule')
