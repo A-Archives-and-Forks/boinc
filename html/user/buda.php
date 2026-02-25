@@ -33,6 +33,24 @@ display_errors();
 
 $buda_root = "../../buda_apps";
 
+// job parameters; can override in project.inc
+
+if (!defined('MIN_QUORUM')) {
+    define('MIN_QUORUM', 1);
+}
+if (!defined('TARGET_NRESULTS')) {
+    define('TARGET_NRESULTS', 1);
+}
+if (!defined('MAX_ERROR_RESULTS')) {
+    define('MAX_ERROR_RESULTS', 2);
+}
+if (!defined('MAX_TOTAL_RESULTS')) {
+    define('MAX_TOTAL_RESULTS', 3);
+}
+if (!defined('MAX_SUCCESS_RESULTS')) {
+    define('MAX_SUCCESS_RESULTS', 3);
+}
+
 // show list of BUDA apps and variants,
 // w/ buttons for adding and deleting
 //
@@ -243,14 +261,20 @@ function create_templates($app, $desc, $dir) {
 
     // replication params
     //
-    $x .= sprintf("      <target_nresults>%d</target_nresults>\n",
-        $desc->min_nsuccess
-    );
     $x .= sprintf("      <min_quorum>%d</min_quorum>\n",
-        $desc->min_nsuccess
+        MIN_QUORUM
+    );
+    $x .= sprintf("      <target_nresults>%d</target_nresults>\n",
+        TARGET_NRESULTS
+    );
+    $x .= sprintf("      <max_error_results>%d</max_error_results>\n",
+        MAX_ERROR_RESULTS
     );
     $x .= sprintf("      <max_total_results>%d</max_total_results>\n",
-        $desc->max_total
+        MAX_TOTAL_RESULTS
+    );
+    $x .= sprintf("      <max_success_results>%d</max_success_results>\n",
+        MAX_SUCCESS_RESULTS
     );
 
     $x .= sprintf("      <max_delay>%f</max_delay>\n",
@@ -493,8 +517,6 @@ function app_form($desc=null) {
         $desc->input_file_names = [];
         $desc->output_file_names = [];
         $desc->max_nbytes_mb = 10;
-        $desc->min_nsuccess = 1;
-        $desc->max_total = 2;
         $desc->max_delay_days = 7;
         $desc->description = null;
         $desc->sci_kw = null;
@@ -527,18 +549,6 @@ function app_form($desc=null) {
     form_checkboxes(
         'Gzip output files?',
         [['gzip_output', '', $desc->gzip_output]]
-    );
-    form_input_text(
-        'Run at most this many total instances of each job',
-        'max_total',
-        $desc->max_total
-    );
-    form_input_text(
-        'Get this many successful instances of each job
-            <br><small>(subject to the above limit)</small>
-        ',
-        'min_nsuccess',
-        $desc->min_nsuccess
     );
     form_input_text(
         'Max job turnaround time, days',
@@ -596,17 +606,6 @@ function app_action($user) {
         $desc->create_time = time();
     }
     $desc->name = $app_name;
-    $min_nsuccess = get_int('min_nsuccess');
-    if ($min_nsuccess <= 0) {
-        error_page('Must specify a positive number of successful instances.');
-    }
-    $max_total = get_int('max_total');
-    if ($max_total <= 0) {
-        error_page('Must specify a positive max number of instances.');
-    }
-    if ($min_nsuccess > $max_total) {
-        error_page('Target # of successful instances must be <= max total');
-    }
     $max_delay_days = get_str('max_delay_days');
     if (!is_numeric($max_delay_days)) {
         error_page('Must specify max delay');
@@ -642,8 +641,6 @@ function app_action($user) {
     $desc->long_name = get_str('long_name');
     $desc->input_file_names = $input_file_names;
     $desc->output_file_names = $output_file_names;
-    $desc->min_nsuccess = $min_nsuccess;
-    $desc->max_total = $max_total;
     $desc->max_delay_days = $max_delay_days;
     $desc->description = get_str('description');
     $desc->gzip_output = get_str('gzip_output', true)?true:false;
@@ -721,24 +718,14 @@ function app_details($user) {
     );
     if (!empty($desc->max_nbytes_mb)) {
         row2(
-            'Max output file size, MB',
-            $desc->max_nbytes_mb
+            'Max output file size',
+            "$desc->max_nbytes_mb MB"
         );
     }
     row2(
-        'Gzip output files?',
+        'gzip output files?',
         empty($desc->gzip_output)?'no':'yes'
     );
-    if (!empty($desc->max_total)) {
-        row2('Max total instances per job:', $desc->max_total);
-    } else {
-        row2('Max total instances per job:', '1');
-    }
-    if (!empty($desc->min_nsuccess)) {
-        row2('Target successful instances per job:', $desc->min_nsuccess);
-    } else {
-        row2('Target successful instances per job:', '1');
-    }
     if (!empty($desc->max_delay_days)) {
         row2('Max job turnaround time, days:', $desc->max_delay_days);
     } else {
