@@ -145,6 +145,7 @@ function get_batch_tar() {
         echo $data;
         flush();
     }
+    pclose($f);
 }
 
 $action = get_str('action');
