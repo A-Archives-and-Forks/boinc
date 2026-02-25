@@ -110,6 +110,7 @@ function get_batch_tar() {
     //
     $cmd = "cd $dir; tar --totals -cf /dev/null * 2>&1";
     $f = popen($cmd, "r");
+    $nbytes = -1;
     while (1) {
         $out = fgets($f);
         if (!$out) break;
@@ -118,6 +119,9 @@ function get_batch_tar() {
             $nbytes = $x[0];
             break;
         }
+    }
+    if ($nbytes<0) {
+        error_page('tar --totals failed');
     }
     pclose($f);
 
