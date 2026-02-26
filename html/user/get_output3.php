@@ -38,7 +38,7 @@ require_once("../inc/submit_util.inc");
 // user is allowed to download output files from batch only if
 // they own batch or have manage-all permissions
 //
-function check_auth($batch_id){
+function check_auth($batch_id) {
     $user = get_logged_in_user();
     if (has_manage_access($user, 0)) {
         return;
@@ -86,7 +86,7 @@ function get_batch_zip() {
     check_auth($batch_id);
     $dir = "../../results/$batch_id";
     if (!is_dir($dir)) {
-        die('no batch dir');
+        error_page('no batch dir');
     }
     $name = "batch_$batch_id.zip";
     $cmd = "cd $dir; rm -f $name; zip -q $name *";
@@ -103,10 +103,13 @@ function get_batch_tar() {
     check_auth($batch_id);
     $dir = "../../results/$batch_id";
     if (!is_dir($dir)) {
-        die('no batch dir');
+        error_page('no batch dir');
     }
 
     $d = fopen($dir, 'r');
+    if (!$d) {
+        error_page('fopen() failed');
+    }
     if (!flock($d, LOCK_EX|LOCK_NB)) {
         error_page(
             "A download of this batch is already in progress."
@@ -153,7 +156,7 @@ function get_batch_tar() {
         flush();
     }
     pclose($f);
-    pclose($d);
+    fclose($d);
 }
 
 $action = get_str('action');
