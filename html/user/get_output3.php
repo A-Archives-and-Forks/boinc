@@ -106,6 +106,13 @@ function get_batch_tar() {
         die('no batch dir');
     }
 
+    $d = fopen($dir, 'r');
+    if (!flock($d, LOCK_EX|LOCK_NB)) {
+        error_page(
+            "A download of this batch is already in progress."
+        );
+    }
+
     // get the size of the tar file (fast - doesn't read files)
     //
     $cmd = "cd $dir; tar --totals -cf /dev/null * 2>&1";
@@ -124,7 +131,7 @@ function get_batch_tar() {
         }
     }
     if ($nbytes<0) {
-        error_page('tar --totals didn't produce result');
+        error_page("tar --totals didn't produce result");
     }
     pclose($f);
 
@@ -146,6 +153,7 @@ function get_batch_tar() {
         flush();
     }
     pclose($f);
+    pclose($d);
 }
 
 $action = get_str('action');
