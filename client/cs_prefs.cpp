@@ -122,9 +122,9 @@ int CLIENT_STATE::get_disk_usages() {
     //
     WSL_DISTRO *wd = host_info.wsl_distros.find_docker();
     if (wd) {
-        retval = dir_size_alloc(wd.base_path.c_str(), size);
+        retval = dir_size_alloc(wd->base_path.c_str(), size);
         if (!retval) {
-            client_disk_usage = size;
+            client_disk_usage += size;
             total_disk_usage += size;
         }
     }
