@@ -148,9 +148,6 @@ static void handle_get_project_status(GUI_RPC_CONN& grc) {
 }
 
 static void handle_get_disk_usage(GUI_RPC_CONN& grc) {
-    double size, boinc_non_project, d_allowed;
-//    double boinc_total;
-
     grc.mfout.printf("<disk_usage_summary>\n");
     int retval = get_filesystem_info(
         gstate.host_info.d_total, gstate.host_info.d_free
@@ -161,27 +158,6 @@ static void handle_get_disk_usage(GUI_RPC_CONN& grc) {
         );
     }
 
-    dir_size_alloc(".", boinc_non_project, false);
-    dir_size_alloc("locale", size, false);
-    boinc_non_project += size;
-#ifdef __APPLE__
-    if (gstate.launched_by_manager) {
-        // If launched by Manager, get Manager's size on disk
-        char path[MAXPATHLEN];
-        double manager_size = 0.0;
-        OSStatus err = noErr;
-
-        retval = proc_pidpath(getppid(), path, sizeof(path));
-        if (retval <= 0) {
-            err = fnfErr;
-        }
-        if (!err) {
-            dir_size_alloc(path, manager_size, true);
-            boinc_non_project += manager_size;
-        }
-    }
-#endif
-//    boinc_total = boinc_non_project;
     gstate.get_disk_usages();
     for (PROJECT* p: gstate.projects) {
         grc.mfout.printf(
@@ -191,9 +167,8 @@ static void handle_get_disk_usage(GUI_RPC_CONN& grc) {
             "</project>\n",
             p->master_url, p->disk_usage
         );
-//        boinc_total += p->disk_usage;
     }
-    d_allowed = gstate.allowed_disk_usage(gstate.total_disk_usage);
+    double d_allowed = gstate.allowed_disk_usage(gstate.total_disk_usage);
     grc.mfout.printf(
         "<d_total>%f</d_total>\n"
         "<d_free>%f</d_free>\n"
@@ -201,7 +176,7 @@ static void handle_get_disk_usage(GUI_RPC_CONN& grc) {
         "<d_allowed>%f</d_allowed>\n",
         gstate.host_info.d_total,
         gstate.host_info.d_free,
-        boinc_non_project,
+        gstate.client_disk_usage,
         d_allowed
     );
     grc.mfout.printf("</disk_usage_summary>\n");

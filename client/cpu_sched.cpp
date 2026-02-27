@@ -1070,7 +1070,7 @@ static void promote_multi_thread_jobs(vector<RESULT*>& runnable_jobs) {
 // return true if r0 is more important to run than r1
 //
 static inline bool more_important(RESULT* r0, RESULT* r1) {
-    bool cp0, cp1;
+    bool cp0=false, cp1;
 
     if (cc_config.prioritize_gpu) {
         cp0 = r0->uses_coprocs();
