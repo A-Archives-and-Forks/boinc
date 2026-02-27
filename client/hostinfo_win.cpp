@@ -1685,7 +1685,7 @@ int HOST_INFO::get_host_info(bool init) {
     // The scheduler looks for 'unusable' - don't change
     //
     if (strlen(virtualbox_version) && wsl_distros.find_docker()) {
-        strcat(' (unusable - Podman/Docker present)', virtualbox_version);
+        safe_strcat(virtualbox_version, " (unusable - Podman/Docker present)");
     }
 
     get_processor_info(
