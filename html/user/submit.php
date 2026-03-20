@@ -1038,6 +1038,7 @@ function handle_retire_batch($user) {
     } else {
         page_head("Confirm retire batch");
         echo "
+            <p>
             Retiring a batch will remove all of its output files.
             Are you sure you want to do this?
             <p>
