@@ -24,7 +24,8 @@
 // then deleting it and the results from the DB.
 //
 // Purge WUs for which file_delete_state == FILE_DELETE_DONE
-// and the WU is either
+// and if --batch:
+// the WU is either
 //    - in a retired batch
 //    - not in a batch
 //
@@ -69,6 +70,7 @@ void usage() {
         "Purge workunit and result records that are no longer needed.\n\n"
         "Usage: db_purge [options]\n"
         "   -d N or --debug_level N     Set verbosity level (1-4; 3=normal, 4=debug)\n"
+        "   --batch                     purge batch jobs only if retired\n"
         "   --min_age_days N            Purge Wus w/ mod time at least N days ago\n"
         "   --max N                     Purge at most N WUs\n"
         "   --zip                       Compress output files by piping through zip\n"
@@ -232,6 +234,7 @@ void* re_index_stream=NULL;
 int time_int=0;
 double min_age_days = 0;
 bool no_archive = false;
+bool batch = false;
 bool dont_delete = false;
 bool daily_dir = false;
 int max_number_workunits_to_purge = 0;
@@ -677,9 +680,11 @@ bool do_pass(string &retired_batch_ids) {
         sprintf(buf, " and appid=%lu", app.id);
         clause += buf;
     }
-    clause += " and batch in (";
-    clause += retired_batch_ids;
-    clause += ")";
+    if (batch) {
+        clause += " and batch in (";
+        clause += retired_batch_ids;
+        clause += ")";
+    }
 
     sprintf(buf, " limit %d", DB_QUERY_LIMIT);
     clause += buf;
@@ -808,6 +813,8 @@ int main(int argc, char** argv) {
     for (i=1; i<argc; i++) {
         if (is_arg(argv[i], "one_pass")) {
             one_pass = true;
+        } else if (is_arg(argv[i], "batch")) {
+            batch = true;
         } else if (is_arg(argv[i], "dont_delete")) {
             dont_delete = true;
         } else if (is_arg(argv[i], "d") || is_arg(argv[i], "debug_level")) {
@@ -946,10 +953,12 @@ int main(int argc, char** argv) {
             break;
         }
         string retired_batch_ids;
-        retval = get_retired_batch_ids(retired_batch_ids);
-        if (retval) {
-            log_messages.printf(MSG_CRITICAL, "Can't get retired batch IDs");
-            exit(1);
+        if (batch) {
+            retval = get_retired_batch_ids(retired_batch_ids);
+            if (retval) {
+                log_messages.printf(MSG_CRITICAL, "Can't get retired batch IDs");
+                exit(1);
+            }
         }
 
         bool did_something = do_pass(retired_batch_ids);
