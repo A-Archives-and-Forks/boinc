@@ -242,6 +242,13 @@ function time_diff($x, $res=3) {
     return $s;
 }
 
+// is the arg either null, '', or whitespace?
+// Note: if ($x) will be false if $x is '0'.
+// We don't want to treat '0' as blank.
+//
+function is_blank($x) {
+    return $x === null || trim($x) === '';
+}
 
 // security vulnerabilities and user-supplied strings:
 // sources:
