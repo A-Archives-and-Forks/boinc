@@ -956,7 +956,10 @@ int main(int argc, char** argv) {
         if (batch) {
             retval = get_retired_batch_ids(retired_batch_ids);
             if (retval) {
-                log_messages.printf(MSG_CRITICAL, "Can't get retired batch IDs");
+                log_messages.printf(MSG_CRITICAL,
+                    "Can't get retired batch IDs; retval %d\n",
+                    retval
+                );
                 exit(1);
             }
         }
