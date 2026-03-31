@@ -283,4 +283,16 @@ define('MEGA', 1024*KILO);
 define('GIGA', 1024*MEGA);
 define('TERA', 1024*GIGA);
 
+// disallow 'external entities'
+//
+function safe_simplexml_load_file($name) {
+    @libxml_disable_entity_loader(true);
+        // deprecated in PHP 8; hide warning
+    return simplexml_load_file($name, 'SimpleXMLElement', LIBXML_NONET);
+}
+function safe_simplexml_load_string($str) {
+    @libxml_disable_entity_loader(true);
+    return simplexml_load_string($str, 'SimpleXMLElement', LIBXML_NONET);
+}
+
 ?>
