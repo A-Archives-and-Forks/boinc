@@ -300,6 +300,8 @@ int AM_ACCOUNT::parse(XML_PARSER& xp) {
     safe_strcpy(url_signature, "");
     authenticator.clear();
     resource_share.init();
+    user_avg_ec = 0;
+    user_total_ec = 0;
 
     while (!xp.get_tag()) {
         if (!xp.is_tag) {
@@ -325,6 +327,8 @@ int AM_ACCOUNT::parse(XML_PARSER& xp) {
         if (xp.parse_string("authenticator", authenticator)) continue;
         if (xp.parse_bool("detach", detach)) continue;
         if (xp.parse_bool("update", update)) continue;
+        if (xp.parse_double("user_avg_ec", user_avg_ec)) continue;
+        if (xp.parse_double("user_total_ec", user_total_ec)) continue;
         if (xp.parse_bool("no_cpu", btemp)) {
             handle_no_rsc("CPU", btemp);
             continue;
@@ -652,6 +656,10 @@ void ACCT_MGR_OP::handle_reply(int http_op_retval) {
         for (const AM_ACCOUNT& acct: accounts) {
             pp = gstate.lookup_project(acct.url.c_str());
             if (pp) {
+                if (gstate.acct_mgr_info.dynamic) {
+                    pp->user_expavg_credit = acct.user_avg_ec;
+                    pp->user_total_credit = acct.user_total_ec;
+                }
                 if (acct.detach) {
                     if (pp->attached_via_acct_mgr) {
                         gstate.detach_project(pp);
@@ -780,6 +788,10 @@ void ACCT_MGR_OP::handle_reply(int http_op_retval) {
                     }
                     if (acct.suspend.present && acct.suspend.value) {
                         pp->suspend();
+                    }
+                    if (gstate.acct_mgr_info.dynamic) {
+                        pp->user_expavg_credit = acct.user_avg_ec;
+                        pp->user_total_credit = acct.user_total_ec;
                     }
                 } else {
                     msg_printf(NULL, MSG_INTERNAL_ERROR,

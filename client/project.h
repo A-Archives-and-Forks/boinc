@@ -200,6 +200,7 @@ struct PROJECT : PROJ_AM {
         // Used for a clean exit to a project,
         // or if a user wants to pause doing work for the project
     bool attached_via_acct_mgr;
+        // if set, don't let user remove project directly
     bool detach_when_done;
         // when no results for this project, detach it.
         // if using AM, do AM RPC before detaching
