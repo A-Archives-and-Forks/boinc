@@ -121,12 +121,14 @@ struct PROJECT : PROJ_AM {
         // and this should go to 1.
         // But we need to keep it around for older projects
 
-    // accounting info; estimated credit and time for CPU and GPU
+    // accounting info for dynamic account managers;
     //
-    double cpu_ec;
-    double cpu_time;
+    double cpu_ec;      // estimated credit
+    double cpu_time;    // device/seconds
     double gpu_ec;
     double gpu_time;
+    int njobs_success;
+    int njobs_error;
 
     // stuff related to scheduler RPCs and master fetch
     //
@@ -154,6 +156,7 @@ struct PROJECT : PROJ_AM {
         // computed by get_disk_usages()
     double disk_share;
         // computed by get_disk_shares();
+    bool dont_use_dcf;
 
     ///////  END OF ITEMS STORED IN client_state.xml
 
@@ -191,8 +194,6 @@ struct PROJECT : PROJ_AM {
     int send_job_log;
         // if nonzero, send this project's job log from that point on
     bool send_full_workload;
-
-    bool dont_use_dcf;
 
     bool suspended_via_gui;
     bool dont_request_more_work;
@@ -315,11 +316,6 @@ struct PROJECT : PROJ_AM {
     // app config stuff
     //
     APP_CONFIGS app_configs;
-
-    // job counting
-    //
-    int njobs_success;
-    int njobs_error;
 
     // total elapsed time of this project's jobs (for export to GUI)
     //

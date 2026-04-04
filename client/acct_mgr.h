@@ -161,6 +161,13 @@ struct AM_ACCOUNT {
     OPTIONAL_BOOL abort_not_started;
     double user_avg_ec;
     double user_total_ec;
+    // the following present if client not already attached
+    double cpu_ec;
+    double cpu_time;
+    double gpu_ec;
+    double gpu_time;
+    int njobs_success;
+    int njobs_error;
 
     void handle_no_rsc(const char*, bool);
     int parse(XML_PARSER&);
