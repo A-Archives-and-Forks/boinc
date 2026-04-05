@@ -801,6 +801,11 @@ void ACCT_MGR_OP::handle_reply(int http_op_retval) {
                     if (acct.suspend.present && acct.suspend.value) {
                         pp->suspend();
                     }
+
+                    // The AM supplies initial accounting info
+                    // (in case the client was previously attached,
+                    // then detached).
+                    //
                     if (gstate.acct_mgr_info.dynamic) {
                         pp->user_expavg_credit = acct.user_avg_ec;
                         pp->user_total_credit = acct.user_total_ec;

@@ -121,7 +121,9 @@ struct PROJECT : PROJ_AM {
         // and this should go to 1.
         // But we need to keep it around for older projects
 
-    // accounting info for dynamic account managers;
+    // accounting info for use with dynamic account managers;
+    // obtained from the AM on attach,
+    // updated by the client, and reported in AM RPCs
     //
     double cpu_ec;      // estimated credit
     double cpu_time;    // device/seconds

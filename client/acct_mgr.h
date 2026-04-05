@@ -161,7 +161,8 @@ struct AM_ACCOUNT {
     OPTIONAL_BOOL abort_not_started;
     double user_avg_ec;
     double user_total_ec;
-    // the following present if client not already attached
+    // the following supplied by dynamic AM if client not already attached
+    // to the project
     double cpu_ec;
     double cpu_time;
     double gpu_ec;
