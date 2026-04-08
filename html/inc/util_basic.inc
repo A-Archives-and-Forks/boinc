@@ -101,6 +101,8 @@ function get_config() {
     return $config;
 }
 
+// TODO: GET RID OF THE FOLLOWING.  Use simplexml
+
 // Look for an element in a line of XML text
 // If it's a single-tag element, and it's present, just return the tag
 //
@@ -117,24 +119,6 @@ function parse_element($xml, $tag) {
         }
     }
     return null;
-}
-
-function parse_next_element($xml, $tag, &$cursor) {
-    $element = null;
-    $closetag = "</" . substr($tag,1);
-    $pos = substr($xml,$cursor);
-    $x = strstr($pos, $tag);
-    if ($x) {
-        if (strstr($tag, "/>")) return $tag;
-        $y = substr($x, strlen($tag));
-        $n = strpos($y, $closetag);
-        if ($n) {
-            $element = substr($y, 0, $n);
-        }
-        $cursor = (strlen($xml) - strlen($x)) + strlen($tag) + strlen($closetag) + strlen($element);
-    }
-    if (!$element) return null;
-    return trim($element);
 }
 
 // return true if XML contains either <tag/> or <tag>1</tag>
