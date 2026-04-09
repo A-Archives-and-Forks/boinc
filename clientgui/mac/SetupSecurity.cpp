@@ -986,25 +986,30 @@ setGroupForUser:
 
     // Hide the home directory and share point https://support.apple.com/en-mn/102099
     // Something like "sudo chflags hidden /Users/boinc_master"
-    args[0] = "/usr/bin/sudo";
-    args[1] = "chflags";
-    args[2] = "hidden";
-    args[3] = buf2;
-    args[4] = NULL;
-    err = posix_spawnp(&thePid, "/usr/bin/sudo", NULL, NULL, args, environ);
-    waitpid(thePid, &status, WUNTRACED);
-    if (status != 0) {
-        err = status;
-    } else {
-        if (WIFEXITED(status)) {
-            err = WEXITSTATUS(status);
-            if (err == 1) {
-                err = errno;
-            }
-        }   // end if (WIFEXITED(status)) else
-    }       // end if waitpid returned 0 sstaus else
-if (err)
-    return err;
+    // buf2 was overwritten to DSCL path "/users/<name>" above; rebuild filesystem path.
+    // Skip if the directory doesn't exist (fresh installs set home to /var/empty).
+    sprintf(buf2, "/Users/%s", user_name);
+    if (access(buf2, F_OK) == 0) {
+        args[0] = "/usr/bin/sudo";
+        args[1] = "chflags";
+        args[2] = "hidden";
+        args[3] = buf2;
+        args[4] = NULL;
+        err = posix_spawnp(&thePid, "/usr/bin/sudo", NULL, NULL, args, environ);
+        waitpid(thePid, &status, WUNTRACED);
+        if (status != 0) {
+            err = status;
+        } else {
+            if (WIFEXITED(status)) {
+                err = WEXITSTATUS(status);
+                if (err == 1) {
+                    err = errno;
+                }
+            }   // end if (WIFEXITED(status)) else
+        }       // end if waitpid returned 0 sstaus else
+        if (err)
+            return err;
+    }
 
     err = ResynchDSSystem();
     if (err != noErr)
