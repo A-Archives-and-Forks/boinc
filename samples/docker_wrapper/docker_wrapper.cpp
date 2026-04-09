@@ -318,15 +318,22 @@ int parse_config_file() {
     return 0;
 }
 
-// See if command output includes "Error"
+// If command output includes "Error", show the output and return true
 //
-int error_output(vector<string> &out) {
+bool output_has_error(vector<string> &out, const char* cmd_name) {
+    bool found = false;
     for (string line: out) {
         if (strstr(line.c_str(), "Error")) {
-            return -1;
+            found = true;
+            break;
         }
+    } 
+    if (!found) return false;
+    fprintf(stderr, "Error output from '%s' command:\n", cmd_name);
+    for (string line: out) {
+        fprintf(stderr, "   %s", line.c_str());
     }
-    return 0;
+    return true;
 }
 
 //////////  PODMAN ARGS  ////////////
@@ -604,8 +611,7 @@ int create_container() {
         fprintf(stderr, "create command failed: %d\n", retval);
         return retval;
     }
-    if (error_output(out)) {
-        fprintf(stderr, "create command output contains 'Error'\n");
+    if (output_has_error(out, "create")) {
         return -1;
     }
 
@@ -614,12 +620,22 @@ int create_container() {
 
 //////////  JOB CONTROL  ////////////
 
+// do an operation (e.g. pause/unpause) on a container.
+// If it fails, print error msgs and return nonzero.
+//
 int container_op(const char *op) {
     char cmd[1024];
     vector<string> out;
     snprintf(cmd, sizeof(cmd), "%s %s", op, container_name);
     int retval = docker_conn.command(cmd, out);
-    return retval;
+    if (retval) {
+        fprintf(stderr, "%s command failed: %d\n", op, retval);
+        return retval;
+    }
+    if (output_has_error(out, op)) {
+        return -1;
+    }
+    return 0;
 }
 
 // Clean up at end of job.
@@ -652,9 +668,10 @@ void cleanup() {
 
 // check for commands from the client
 //
-void poll_client_msgs() {
+int poll_client_msgs() {
     BOINC_STATUS status;
     boinc_get_status(&status);
+    int retval;
 #if 0
     fprintf(stderr, "client messages: nohb %d quit %d abort %d suspended %d\n",
         status.no_heartbeat,
@@ -663,6 +680,9 @@ void poll_client_msgs() {
         status.suspended
     );
 #endif
+    // see if we should exit.
+    // Don't error-check docker ops; we'll do that on restart.
+    //
     if (status.no_heartbeat) {
         fprintf(stderr, "no heartbeat from client - pausing and exiting\n");
         container_op("pause");
@@ -682,7 +702,8 @@ void poll_client_msgs() {
             fprintf(stderr, "client: suspended\n");
         }
         if (running) {
-            container_op("pause");
+            retval = container_op("pause");
+            if (retval) return retval;
             running = false;
         }
     } else {
@@ -690,13 +711,18 @@ void poll_client_msgs() {
             fprintf(stderr, "client: not suspended\n");
         }
         if (!running) {
-            container_op("unpause");
+            retval = container_op("unpause");
+            if (retval) return retval;
             running = true;
         }
     }
+    return 0;
 }
 
-// check whether job has exited
+// check whether job:
+// - has exited success (JOB_SUCCESS)
+// - has exited failure (JOB_FAIL)
+// - is in progress (JOB_IN_PROGRESS)
 // Note: on both Podman and Docker this takes significant CPU time
 // (like .03 sec) so do it infrequently (10 sec)
 //
@@ -951,7 +977,11 @@ int main(int argc, char** argv) {
         }
         docker_type = aid.host_info.docker_type;
     }
-    docker_conn.init(docker_type, config.verbose>0);
+    retval = docker_conn.init(docker_type, config.verbose>0);
+    if (retval) {
+        fprintf(stderr, "docker_conn.init() failed: %d\n", retval);
+        boinc_finish(1);
+    }
 #endif
     fprintf(stderr, "Using %s\n", docker_type_str(docker_type));
 
@@ -999,8 +1029,7 @@ int main(int argc, char** argv) {
         break;
     case CONTAINER_EXITED:
         // This probably means the host was rebooted.
-        // If we have a checkpoint, restore from there.
-        // Otherwise start from the beginning.
+        // Start from the beginning.
         //
         fprintf(stderr, "container is exited; restarting\n");
         need_start = true;
@@ -1012,6 +1041,7 @@ int main(int argc, char** argv) {
         break;
     default:
         fprintf(stderr, "bad container state %d\n", state);
+        container_op("kill");
         cleanup();
         boinc_finish(1);
     }
@@ -1044,25 +1074,31 @@ int main(int argc, char** argv) {
             exit(0);
         }
 #endif
-        poll_client_msgs();
+        retval = poll_client_msgs();
+        if (retval) {
+            fprintf(stderr, "poll_client_msgs() returned %d\n", retval);
+            // don't fail job; wrapper restart might fix things
+            exit(0);
+        }
         if (i%STATUS_PERIOD == 0) {
             // do this stuff every 10 sec
             // First, see if app has exited
             //
             switch(poll_app()) {
             case JOB_FAIL:
+                container_op("kill");
                 cleanup();
                 boinc_finish(1);
                 break;
             case JOB_SUCCESS:
-                cleanup();
-                // JOB_SUCCESS means Docker/Podman succeeded.
-                // In this case forward the exit code
-                // of the container payload.
+                // JOB_SUCCESS means the container exited.
+                // Forward the exit code of the container.
                 //
+                cleanup();
                 boinc_finish(container_exit_code);
                 break;
             default:
+                // in progress
                 break;
             }
 
