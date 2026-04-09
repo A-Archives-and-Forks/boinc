@@ -327,7 +327,7 @@ bool output_has_error(vector<string> &out, const char* cmd_name) {
             found = true;
             break;
         }
-    } 
+    }
     if (!found) return false;
     fprintf(stderr, "Error output from '%s' command:\n", cmd_name);
     for (string line: out) {
