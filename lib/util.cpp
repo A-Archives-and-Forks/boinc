@@ -742,7 +742,7 @@ int DOCKER_CONN::init(DOCKER_TYPE docker_type, bool _verbose) {
 }
 #endif
 
-// issue a Docker command and return its output
+// issue a Docker command and return its output (stdout + stderr)
 // as a vector of lines (\n-terminated)
 //
 int DOCKER_CONN::command(const char* cmd, vector<string> &out) {
@@ -758,7 +758,7 @@ int DOCKER_CONN::command(const char* cmd, vector<string> &out) {
     // In the Win case we read the output from a pipe.
     // Append 'EOM' to the output so we know when we've reached the end
 
-    snprintf(buf, sizeof(buf), "%s %s; echo EOM\n", cli_prog, cmd);
+    snprintf(buf, sizeof(buf), "%s %s 2>&1; echo EOM\n", cli_prog, cmd);
     write_to_pipe(ctl_wc.in_write, buf);
     retval = read_from_pipe(
         ctl_wc.out_read, ctl_wc.proc_handle, output, CMD_TIMEOUT, "EOM"
@@ -770,7 +770,7 @@ int DOCKER_CONN::command(const char* cmd, vector<string> &out) {
     out = split(output, '\n');
 #else
     snprintf(buf, sizeof(buf),
-        "%s %s",
+        "%s %s 2>&1",
         cli_prog, cmd
     );
     retval = run_command(buf, out);
