@@ -384,9 +384,9 @@ int main(int argc, char *argv[])
     for (i=0; i<RETRY_LIMIT; ++i) {
         err = CreateBOINCUsersAndGroups();
         if (err != noErr) {
-            printf("CreateBOINCUsersAndGroups returned %d (repetition=%d)", err, i);
+            printf("CreateBOINCUsersAndGroups returned %d (repetition=%d)\n", err, i);
             fflush(stdout);
-            REPORT_ERROR(i >= RETRY_LIMIT);
+            REPORT_ERROR(i >= RETRY_LIMIT - 1);
             continue;
         }
 
@@ -394,17 +394,17 @@ int main(int argc, char *argv[])
         err = SetBOINCAppOwnersGroupsAndPermissions(appPath[brandID]);
 
         if (err != noErr) {
-            printf("SetBOINCAppOwnersGroupsAndPermissions returned %d (repetition=%d)", err, i);
+            printf("SetBOINCAppOwnersGroupsAndPermissions returned %d (repetition=%d)\n", err, i);
             fflush(stdout);
-            REPORT_ERROR(i >= RETRY_LIMIT);
+            REPORT_ERROR(i >= RETRY_LIMIT - 1);
             continue;
         }
 
         err = SetBOINCDataOwnersGroupsAndPermissions();
         if (err != noErr) {
-            printf("SetBOINCDataOwnersGroupsAndPermissions returned %d (repetition=%d)", err, i);
+            printf("SetBOINCDataOwnersGroupsAndPermissions returned %d (repetition=%d)\n", err, i);
             fflush(stdout);
-            REPORT_ERROR(i >= RETRY_LIMIT);
+            REPORT_ERROR(i >= RETRY_LIMIT - 1);
             continue;
         }
 
@@ -414,12 +414,21 @@ int main(int argc, char *argv[])
             true, false, NULL, 0
         );
         if (err != noErr) {
-            printf("check_security returned %d (repetition=%d)", err, i);
+            printf("check_security returned %d (repetition=%d)\n", err, i);
             fflush(stdout);
-            REPORT_ERROR(i >= RETRY_LIMIT);
+            REPORT_ERROR(i >= RETRY_LIMIT - 1);
         } else {
             break;
         }
+    }
+
+    // If security setup failed after all retries, report failure to the
+    // macOS Installer so it does not show "Installation Successful" when
+    // permissions were never set correctly.
+    if (err != noErr) {
+        printf("BOINC security setup failed after %d attempts (last error=%d)\n", RETRY_LIMIT, err);
+        fflush(stdout);
+        return err;
     }
 
 #else   // ! defined(SANDBOX)
