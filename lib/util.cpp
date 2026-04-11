@@ -799,7 +799,7 @@ int DOCKER_CONN::command(const char* cmd, vector<string> &out) {
 //
 int DOCKER_CONN::parse_image_name(string line, string &name) {
     char buf[1024];
-    strcpy(buf, line.c_str());
+    safe_strcpy(buf, line.c_str());
     if (strstr(buf, "REPOSITORY")) return -1;
     if (strstr(buf, "localhost/") != buf) return -1;
     char *p = buf + strlen("localhost/");
@@ -822,7 +822,7 @@ int DOCKER_CONN::parse_image_name(string line, string &name) {
 
 int DOCKER_CONN::parse_container_name(string line, string &name) {
     char buf[1024];
-    strcpy(buf, line.c_str());
+    safe_strcpy(buf, line.c_str());
     if (strstr(buf, "CONTAINER")) return -1;
     char *p = strrchr(buf, ' ');
     if (!p) return -1;
