@@ -206,7 +206,7 @@ function variant_form($user) {
     ";
     $sb = '<br><small>From your <a href=sandbox.php>file sandbox</a></small>';
     $pc = '<br><small>Specify
-    <a href=https://github.com/BOINC/boinc/wiki/AppPlan>GPU and other host requirements</a>.<br>Leave blank if none.</small>';
+    <a href=https://github.com/BOINC/boinc/wiki/Plan-classes>GPU and other host requirements</a>.<br>Leave blank if none.</small>';
     form_start('buda.php');
     form_input_hidden('app', $app);
     form_input_hidden('action', 'variant_action');

@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-// Handler for remote job submission.
-// See https://github.com/BOINC/boinc/wiki/RemoteJobs
+// Handler for remote job submission RPCs.
+// See https://github.com/BOINC/boinc/wiki/Remote-job-submission-RPCs
 
 require_once("../inc/boinc_db.inc");
 require_once("../inc/submit_db.inc");
