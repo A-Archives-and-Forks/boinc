@@ -112,7 +112,7 @@ function project_config_object() {
 function project_config_val($tag) {
     $doc = project_config_object();
     if (isset($doc->$tag)) {
-        return (string)$doc->$tag;
+        return trim((string)$doc->$tag);
     }
     return null;
 }
@@ -124,7 +124,7 @@ function project_config_bool($tag) {
     if (!isset($doc->$tag)) {
         return false;
     }
-    if ((string)$doc->$tag == '0') {
+    if (trim((string)$doc->$tag) == '0') {
         return false;
     }
     return true;
