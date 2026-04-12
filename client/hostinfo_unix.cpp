@@ -2301,18 +2301,33 @@ long xss_idle() {
 
 bool get_idle_time_from_daemon(long &idle_time) {
     static int64_t* seg_ptr = NULL;
-    int fd = 0;
     if (!seg_ptr) {
-        fd = shm_open("/idle_detect_shmem",  O_RDONLY, 0);
-        seg_ptr = (int64_t*)mmap(
+        int fd = shm_open("/idle_detect_shmem",  O_RDONLY, 0);
+        if (fd < 0) {
+            return false;
+        }
+
+        struct stat st;
+        if (fstat(fd, &st)) {
+            close(fd);
+            return false;
+        }
+        if (st.st_size < 2*sizeof(int64_t)) {
+            close(fd);
+            return false;
+        }
+
+        int64_t* mapped_ptr = (int64_t*)mmap(
             NULL, 2*sizeof(int64_t), PROT_READ, MAP_SHARED, fd, 0
         );
+        close(fd);
+        if (mapped_ptr == MAP_FAILED) {
+            return false;
+        }
+
+        seg_ptr = mapped_ptr;
     }
     if (!seg_ptr) return false;
-
-    struct stat st;
-    if (fstat(fd, &st)) return false;
-    if (st.st_size < 2*sizeof(int64_t)) return false;
 
     // make sure the shmem is actually being updated
     //
