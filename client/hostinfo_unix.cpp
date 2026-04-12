@@ -2301,13 +2301,18 @@ long xss_idle() {
 
 bool get_idle_time_from_daemon(long &idle_time) {
     static int64_t* seg_ptr = NULL;
+    int fd = 0;
     if (!seg_ptr) {
-        int fd = shm_open("/idle_detect_shmem",  O_RDONLY, 0);
+        fd = shm_open("/idle_detect_shmem",  O_RDONLY, 0);
         seg_ptr = (int64_t*)mmap(
             NULL, 2*sizeof(int64_t), PROT_READ, MAP_SHARED, fd, 0
         );
     }
     if (!seg_ptr) return false;
+
+    struct stat st;
+    if (fstat(fd, &st)) return false;
+    if (st.st_size < 2*sizeof(int64_t)) return false;
 
     // make sure the shmem is actually being updated
     //
@@ -2320,6 +2325,19 @@ bool get_idle_time_from_daemon(long &idle_time) {
     //printf("idle time: %ld\n", idle_time);
     return true;
 }
+
+bool detect_wayland() {
+    const char* wayland_display = getenv("WAYLAND_DISPLAY");
+    if (wayland_display && strlen(wayland_display)) {
+        return true;
+    }
+    const char* xdg_session_type = getenv("XDG_SESSION_TYPE");
+    if (xdg_session_type && strcmp(xdg_session_type, "wayland") == 0) {
+        return true;
+    }
+    return false;
+}
+
 #endif      // !ANDROID
 
 // get idle time.  Try the new approach, if it fails use old
@@ -2328,8 +2346,19 @@ long HOST_INFO::user_idle_time(bool check_all_logins) {
     long idle_time = USER_IDLE_TIME_INF;
 
 #ifndef ANDROID
+    static bool show_idle_time_legacy_warning = true;
     if (get_idle_time_from_daemon(idle_time)) {
+        show_idle_time_legacy_warning = false;
         return idle_time;
+    }
+
+    if (show_idle_time_legacy_warning) {
+        msg_printf(NULL, MSG_INFO,
+            "Currently BOINC uses legacy idle detection methods that might not \
+work properly on all systems. Please consider installing modern idle detection \
+utility that works on Wayland and X11: \
+https://github.com/jamescowens/idle_detect");
+        show_idle_time_legacy_warning = false;
     }
 #endif
 
@@ -2344,7 +2373,13 @@ long HOST_INFO::user_idle_time(bool check_all_logins) {
 #if LINUX_LIKE_SYSTEM
 
 #if HAVE_XSS
-    idle_time = min(idle_time, xss_idle());
+#ifndef ANDROID
+    static bool wayland_detected = detect_wayland();
+    if (!wayland_detected) {
+        //printf("Using XScreenSaver API for idle detection\n");
+        idle_time = min(idle_time, xss_idle());
+    }
+#endif // !ANDROID
 #endif // HAVE_XSS
 
 #else
