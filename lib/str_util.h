@@ -22,8 +22,6 @@
 #include <vector>
 #include <string.h>
 
-#include "str_replace.h"
-
 #define safe_strcpy(x, y) strlcpy(x, y, sizeof(x))
 #define safe_strcat(x, y) strlcat(x, y, sizeof(x))
 
@@ -38,8 +36,8 @@ extern void strip_quotes(std::string&);
 extern void unescape_os_release(char *str);
 extern void collapse_whitespace(char *str);
 extern void collapse_whitespace(std::string&);
-extern char* time_to_string(double);
-extern char* precision_time_to_string(double);
+extern char* time_to_string(double, bool utc=false);
+extern char* precision_time_to_string(double, bool utc=false);
 extern void secs_to_hmsf(double, char*);
 extern std::string timediff_format(double);
 
@@ -88,13 +86,6 @@ extern int string_substitute(
 // convert UNIX time to MySQL timestamp (yyyymmddhhmmss)
 //
 extern void mysql_timestamp(double, char*);
-
-// parse host.serialnum into component parts.
-// Given a string of the form
-// [BOINC|7.2.42][CUDA|GeForce GTX 860M|1|2048MB|34052|101][INTEL|Intel(R) HD Graphics 4600|1|1752MB||102][vbox|4.2.16]
-// split it into the BOINC, vbox, and other (coproc) parts
-//
-extern void parse_serialnum(char* in, char* boinc, char* vbox, char* coprocs);
 
 // take a malloced string.
 // if \n is not last char, add it.

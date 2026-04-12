@@ -72,7 +72,9 @@ function create_account(
     $url = $project_url."/create_account.php?email_addr=".urlencode($email_addr)."&passwd_hash=$passwd_hash&user_name=".urlencode($user_name);
 
     $reply = fetch_url($url);
-    if (!$reply) return array(null, -1, "HTTP error to $url");
+    if (!$reply) {
+        return array(null, -1, "HTTP error to $url");
+    }
 
     $r = @simplexml_load_string($reply);
     if (!$r) {
@@ -101,6 +103,8 @@ function create_account(
 // Get info needed to show Download buttons
 // that auto-attach to a particular project or account manager.
 //
+// I DON'T THINK THIS IS USED - OK TO DELETE
+//
 // args:
 //      $project_url: the URL of the project or account manager
 //      $rpc_key: a security token supplied by the above
@@ -127,7 +131,7 @@ function download_software($project_url, $rpc_key, $auth, $user_agent) {
     return array($r, 0, null);
 }
 
-if (1) {
+if (0) {
     // Example usage of download_software().
 
     // Show a download button, which when clicked will download a

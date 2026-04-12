@@ -1,3 +1,21 @@
+# This file is part of BOINC.
+# https://boinc.berkeley.edu
+# Copyright (C) 2025 University of California
+#
+# BOINC is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Lesser General Public License
+# as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# BOINC is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 # This should work on Linux.  Modify as needed for other platforms.
 
 BOINC_DIR = ../..
@@ -5,6 +23,16 @@ BOINC_SOURCE_API_DIR = $(BOINC_DIR)/api
 BOINC_SOURCE_LIB_DIR = $(BOINC_DIR)/lib
 BOINC_SOURCE_ZIP_DIR = $(BOINC_DIR)/zip
 FREETYPE_DIR = /usr/include/freetype2
+
+ifdef RELEASE_ARCH
+  CFLAGS += -O3 -flto
+  CXXFLAGS += -O3 -flto
+  LDFLAGS += -O3 -flto -s -static-libstdc++
+else
+  CFLAGS += -O0 -g
+  CXXFLAGS += -O0 -g
+  LDFLAGS += -O0 -g
+endif
 
 ifdef ANDROID
   BOINC_API_DIR = $(TCINCLUDES)/lib
@@ -22,7 +50,7 @@ else
   MAKEFILE_STDLIB  = libstdc++.a
 endif
 
-CXXFLAGS += -g \
+CXXFLAGS += \
 	-Wall -W -Wshadow -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings -fno-common \
     -DAPP_GRAPHICS \
     -I$(BOINC_DIR) \
@@ -46,6 +74,7 @@ LIBGL= -lGL
 LIBUI = -lX11 -lXmu
 LIBFTGL = -lftgl
 LIBJPEG = -ljpeg
+LIBZIP = -lzip -lz
 
 ifdef BUILD_APPS_WITH_VCPKG
   BUILD_DIR     = $(BOINC_DIR)/3rdParty/linux
@@ -118,10 +147,10 @@ uc2_graphics: uc2_graphics.o ttfont.o $(MAKEFILE_STDLIB) $(BOINC_LIB_DIR)/libboi
 
 slide_show: slide_show.o $(MAKEFILE_STDLIB) $(BOINC_LIB_DIR)/libboinc.a $(BOINC_API_DIR)/libboinc_graphics2.a
 	$(CXX) $(CXXFLAGS) -o slide_show slide_show.o $(MAKEFILE_LDFLAGS) \
-	$(MINGW_ZIP_FIX) \
 	$(BOINC_API_DIR)/libboinc_graphics2.a \
 	$(BOINC_API_DIR)/libboinc_api.a \
 	$(BOINC_LIB_DIR)/libboinc.a \
-	$(BOINC_ZIP_DIR)/libboinc_zip.a \
-    $(LIBGLUT) $(LIBGLU) $(LIBJPEG) \
-    $(LIBGL) $(LIBUI) -lm
+  $(BOINC_ZIP_DIR)/libboinc_zip.a \
+  $(LIBZIP) \
+  $(LIBGLUT) $(LIBGLU) $(LIBJPEG) \
+  $(LIBGL) $(LIBUI) -lm

@@ -20,6 +20,9 @@
 // by scanning the input template, macro-substituting the input files,
 // and putting in the command line element and additional XML
 //
+// Input files must already be staged.
+// If the .md5 file is not present, create it.
+//
 // Called (only) in create_work.cpp
 
 #include <stdio.h>
@@ -397,7 +400,10 @@ static int process_file_info(
     return 0;
 }
 
-// parse the <workunit> elements, which includes file refs and job params
+// Process the <workunit> section of an input template.
+// Copy resource usage and replication params to 'wu'.
+// Append XML (the workunit's xml_doc) to 'out'.
+// Add the given command line and additional XML.
 //
 static int process_workunit(
     XML_PARSER& xp, WORKUNIT& wu, string& out,
@@ -511,6 +517,16 @@ static int process_workunit(
             out += "\n";
         }
     }
+
+    // fill in possibly missing parameters
+    //
+    if (wu.target_nresults > wu.max_success_results) {
+        wu.max_success_results = wu.target_nresults;
+    }
+    if (wu.target_nresults > wu.max_total_results) {
+        wu.max_total_results = wu.target_nresults;
+    }
+
     if (n_file_refs != (int)infiles.size()) {
         boinc::fprintf(stderr, "#file refs != #file infos\n");
         return ERR_XML_PARSE;

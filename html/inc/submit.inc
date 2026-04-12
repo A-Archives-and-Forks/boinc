@@ -127,10 +127,10 @@ function req_to_xml($req, $op) {
 //
 function validate_request($req) {
     if (!is_object($req)) return "req is not an object";
-    if (!array_key_exists('project', $req)) return "missing req->project";
-    if (!array_key_exists('authenticator', $req)) return "missing req->authenticator";
-    if (!array_key_exists('app_name', $req)) return "missing req->app_name";
-    if (!array_key_exists('jobs', $req)) return "missing req->jobs";
+    if (!property_exists($req, 'project')) return "missing req->project";
+    if (!property_exists($req, 'authenticator')) return "missing req->authenticator";
+    if (!property_exists($req, 'app_name')) return "missing req->app_name";
+    if (!property_exists($req, 'jobs')) return "missing req->jobs";
     if (!is_array($req->jobs)) return "req->jobs is not an array";
     foreach ($req->jobs as $job) {
         // other checks
@@ -152,27 +152,29 @@ function do_http_op($req, $xml, $op) {
         curl_setopt($ch, CURLOPT_TIMEOUT, $rpc_timeout);
     }
 
-// see if we need to send any files
-//
-$nfiles = 0;
-$post = array();
-$post["request"] = $xml;
-$cwd = getcwd();
-if ($op == "submit_batch") {
-    foreach ($req->jobs as $job) {
-        foreach ($job->input_files as $file) {
-            if ($file->mode == "inline") {
-                $path = realpath("$cwd/$file->path");
-                $post["file$nfiles"] = $path;
-                $nfiles++;
+    // see if we need to send any files
+    //
+    $nfiles = 0;
+    $post = array();
+    $post["request"] = $xml;
+    $cwd = getcwd();
+    if ($op == "submit_batch") {
+        foreach ($req->jobs as $job) {
+            foreach ($job->input_files as $file) {
+                if ($file->mode == "inline") {
+                    $path = realpath("$cwd/$file->path");
+                    $post["file$nfiles"] = $path;
+                    $nfiles++;
+                }
             }
         }
     }
-}
-curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
     $reply = curl_exec($ch);
     curl_close($ch);
-    if (!$reply) return array(null, "HTTP error");
+    if (!$reply) {
+        return array(null, "HTTP error");
+    }
     $r = @simplexml_load_string($reply);
     if (!$r) {
         return array(null, "Can't parse reply XML:\n$reply");

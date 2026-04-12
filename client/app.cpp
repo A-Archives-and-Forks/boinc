@@ -209,7 +209,7 @@ int ACTIVE_TASK::preempt(PREEMPT_TYPE preempt_type, int reason) {
                 result->name
             );
         }
-        return request_exit();
+        return request_quit();
     } else {
         if (show_msg) {
             msg_printf(result->project, MSG_INFO,
@@ -360,22 +360,21 @@ void procinfo_show(PROC_MAP& pm) {
 //
 void ACTIVE_TASK_SET::get_memory_usage() {
     static double last_mem_time=0;
-    unsigned int i;
     int retval;
     static bool first = true;
-    double diff=0;
+    double delta_t=0;
     bool vbox_app_running = false;
 
     if (!first) {
-        diff = gstate.now - last_mem_time;
-        if (diff < 0 || diff > MEMORY_USAGE_PERIOD + 10) {
+        delta_t = gstate.now - last_mem_time;
+        if (delta_t < 0 || delta_t > MEMORY_USAGE_PERIOD + 10) {
             // user has changed system clock,
             // or there has been a long system sleep
             //
             last_mem_time = gstate.now;
             return;
         }
-        if (diff < MEMORY_USAGE_PERIOD) return;
+        if (delta_t < MEMORY_USAGE_PERIOD) return;
     }
 
     last_mem_time = gstate.now;
@@ -394,8 +393,7 @@ void ACTIVE_TASK_SET::get_memory_usage() {
         boinc_total.clear();
         boinc_total.working_set_size_smoothed = 0;
     }
-    for (i=0; i<active_tasks.size(); i++) {
-        ACTIVE_TASK* atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         if (atp->task_state() == PROCESS_UNINITIALIZED) continue;
         if (atp->pid ==0) continue;
 
@@ -415,7 +413,7 @@ void ACTIVE_TASK_SET::get_memory_usage() {
             v = &(atp->other_pids);
         }
         procinfo_app(pi, v, pm, atp->app_version->graphics_exec_file);
-        if (atp->app_version->is_vm_app) {
+        if (atp->app_version->is_vbox_app) {
             vbox_app_running = true;
             // the memory of virtual machine apps is not reported correctly,
             // at least on Windows.  Use the VM size instead.
@@ -436,7 +434,7 @@ void ACTIVE_TASK_SET::get_memory_usage() {
 
         if (!first) {
             int pf = pi.page_fault_count - last_page_fault_count;
-            pi.page_fault_rate = pf/diff;
+            pi.page_fault_rate = pf/delta_t;
             if (log_flags.mem_usage_debug) {
                 msg_printf(atp->result->project, MSG_INFO,
                     "[mem_usage] %s%s: WS %.2fMB, smoothed %.2fMB, swap %.2fMB, %.2f page faults/sec, user CPU %.3f, kernel CPU %.3f",
@@ -473,8 +471,7 @@ void ACTIVE_TASK_SET::get_memory_usage() {
     //
     static string exclusive_app_name;
         // name of currently running exclusive app, or blank if none
-    for (i=0; i<cc_config.exclusive_apps.size(); i++) {
-        string &eapp = cc_config.exclusive_apps[i];
+    for (const string &eapp: cc_config.exclusive_apps) {
         if (app_running(pm, eapp.c_str())) {
             if (log_flags.mem_usage_debug) {
                 msg_printf(NULL, MSG_INFO,
@@ -505,8 +502,7 @@ void ACTIVE_TASK_SET::get_memory_usage() {
     }
 
     static string exclusive_gpu_app_name;
-    for (i=0; i<cc_config.exclusive_gpu_apps.size(); i++) {
-        string &eapp = cc_config.exclusive_gpu_apps[i];
+    for (const string &eapp: cc_config.exclusive_gpu_apps) {
         if (app_running(pm, eapp.c_str())) {
             if (log_flags.mem_usage_debug) {
                 msg_printf(NULL, MSG_INFO,
@@ -536,22 +532,69 @@ void ACTIVE_TASK_SET::get_memory_usage() {
         }
     }
 
-#if defined(__linux__) || defined(_WIN32) || defined(__APPLE__)
     // compute non_boinc_cpu_usage
-    // Improved version for systems where we can get total CPU (Win, Linux, Mac)
+    non_boinc_cpu_usage = 0;
+
+#if defined(__linux__) || defined(_WIN32) || defined(__APPLE__)
+#ifndef ANDROID
+    // Improved version for systems where we can get total CPU
+    // (Win, Linux, Mac)
     //
-    static double last_nbrc=0;
     double total_cpu_time_now = total_cpu_time();
-    if (total_cpu_time_now != 0.0) {    // total_cpu_time() returns 0.0 on error
-        double nbrc = total_cpu_time_now - boinc_related_cpu_time(pm, vbox_app_running);
-        double delta_nbrc = nbrc - last_nbrc;
-        if (delta_nbrc < 0) delta_nbrc = 0;
-        last_nbrc = nbrc;
-        if (!first) {
-            non_boinc_cpu_usage = delta_nbrc/(diff*gstate.host_info.p_ncpus);
-            //printf("non_boinc_cpu_usage %f\n", non_boinc_cpu_usage);
+
+    // total_cpu_time() returns 0 on error
+    //
+    if (total_cpu_time_now != 0) {
+        double brc;
+        bool reset;
+        boinc_related_cpu_time(pm, vbox_app_running, brc, reset);
+#ifdef __linux__
+        // on Win and Mac,
+        // boinc_related_cpu_time() includes CPU time of Docker jobs.
+        // On Linux we need to do it by looking at the
+        // reported CPU times of the jobs
+        // (which may be less reliable/accurate)
+        //
+        static double prev_docker = 0;
+        double docker = 0;
+        for (ACTIVE_TASK* atp: active_tasks) {
+            if (atp->app_version->is_docker_app) {
+                docker += atp->current_cpu_time;
+            }
         }
+        brc += docker;
+        if (docker < prev_docker) {
+            reset = true;
+        }
+        prev_docker = docker;
+#endif
+        // At this point we have brc (BOINC-related CPU).
+        // If reset is true, it's incomparable with the previous value
+
+        static double prev_nbrc=0;
+        double nbrc = total_cpu_time_now - brc;
+        if (!first) {
+            if (reset) {
+                if (log_flags.mem_usage_debug) {
+                    msg_printf(NULL, MSG_INFO,
+                        "[mem_usage] reset in BOINC-related CPU"
+                    );
+                }
+            } else {
+                double delta_nbrc = nbrc - prev_nbrc;
+                if (delta_nbrc < 0) delta_nbrc = 0;
+                non_boinc_cpu_usage = delta_nbrc/(delta_t*gstate.host_info.p_ncpus);
+                if (log_flags.mem_usage_debug) {
+                    msg_printf(NULL, MSG_INFO,
+                        "[mem_usage] total CPU time %.2f, brc %.2f, nbrc: %.2f, delta_nbrc %.2f, dt %.2f",
+                        total_cpu_time_now, brc, nbrc, delta_nbrc, delta_t
+                    );
+                }
+            }
+        }
+        prev_nbrc = nbrc;
     } else
+#endif
 #endif
     {
         // compute non_boinc_cpu_usage the old way
@@ -578,7 +621,7 @@ void ACTIVE_TASK_SET::get_memory_usage() {
         }
         double new_cpu_time = pi.user_time + pi.kernel_time;
         if (!first) {
-            non_boinc_cpu_usage = (new_cpu_time - last_cpu_time)/(diff*gstate.host_info.p_ncpus);
+            non_boinc_cpu_usage = (new_cpu_time - last_cpu_time)/(delta_t*gstate.host_info.p_ncpus);
             // processes might have exited in the last 10 sec,
             // causing this to be negative.
             if (non_boinc_cpu_usage < 0) non_boinc_cpu_usage = 0;
@@ -628,15 +671,14 @@ int ACTIVE_TASK::move_trickle_file() {
 //
 int ACTIVE_TASK::current_disk_usage(double& size) {
     double x;
-    unsigned int i;
     int retval;
     FILE_INFO* fip;
     char path[MAXPATHLEN];
 
     retval = dir_size(slot_dir, size);
     if (retval) return retval;
-    for (i=0; i<result->output_files.size(); i++) {
-        fip = result->output_files[i].file_info;
+    for (const FILE_REF &fref: result->output_files) {
+        fip = fref.file_info;
         get_pathname(fip, path, sizeof(path));
         retval = file_size(path, x);
         if (!retval) size += x;
@@ -648,9 +690,8 @@ int ACTIVE_TASK::current_disk_usage(double& size) {
 }
 
 bool ACTIVE_TASK_SET::is_slot_in_use(int slot) {
-    unsigned int i;
-    for (i=0; i<active_tasks.size(); i++) {
-        if (active_tasks[i]->slot == slot) {
+    for (ACTIVE_TASK *atp: active_tasks) {
+        if (atp->slot == slot) {
             return true;
         }
     }
@@ -659,9 +700,8 @@ bool ACTIVE_TASK_SET::is_slot_in_use(int slot) {
 
 bool ACTIVE_TASK_SET::is_slot_dir_in_use(char* dir) {
     char path[MAXPATHLEN];
-    unsigned int i;
-    for (i=0; i<active_tasks.size(); i++) {
-        get_slot_dir(active_tasks[i]->slot, path, sizeof(path));
+    for (ACTIVE_TASK *atp: active_tasks) {
+        get_slot_dir(atp->slot, path, sizeof(path));
         if (!strcmp(path, dir)) return true;
     }
     return false;
@@ -729,9 +769,8 @@ int ACTIVE_TASK::get_free_slot(RESULT* rp) {
 #endif
 
 bool ACTIVE_TASK_SET::slot_taken(int slot) {
-    unsigned int i;
-    for (i=0; i<active_tasks.size(); i++) {
-        if (active_tasks[i]->slot == slot) return true;
+    for (ACTIVE_TASK *atp: active_tasks) {
+        if (atp->slot == slot) return true;
     }
     return false;
 }
@@ -871,7 +910,6 @@ int ACTIVE_TASK::write_gui(MIOFILE& fout) {
 int ACTIVE_TASK::parse(XML_PARSER& xp) {
     char result_name[256], project_master_url[256];
     int n, dummy;
-    unsigned int i;
     PROJECT* project=0;
     double x;
 
@@ -924,8 +962,7 @@ int ACTIVE_TASK::parse(XML_PARSER& xp) {
 
             // make sure no two active tasks are in same slot
             //
-            for (i=0; i<gstate.active_tasks.active_tasks.size(); i++) {
-                ACTIVE_TASK* atp = gstate.active_tasks.active_tasks[i];
+            for (ACTIVE_TASK* atp: gstate.active_tasks.active_tasks) {
                 if (atp->slot == slot) {
                     msg_printf(project, MSG_INTERNAL_ERROR,
                         "State file error: two tasks in slot %d\n", slot
@@ -986,12 +1023,9 @@ int ACTIVE_TASK::parse(XML_PARSER& xp) {
 }
 
 int ACTIVE_TASK_SET::write(MIOFILE& fout) {
-    unsigned int i;
-    int retval;
-
     fout.printf("<active_task_set>\n");
-    for (i=0; i<active_tasks.size(); i++) {
-        retval = active_tasks[i]->write(fout);
+    for (ACTIVE_TASK *atp: active_tasks) {
+        int retval = atp->write(fout);
         if (retval) return retval;
     }
     fout.printf("</active_task_set>\n");
@@ -1075,10 +1109,10 @@ void MSG_QUEUE::msg_queue_poll(MSG_CHANNEL& channel) {
         msgs.erase(msgs.begin());
         last_block = 0;
     }
-    for (unsigned int i=0; i<msgs.size(); i++) {
-        if (log_flags.app_msg_send) {
+    if (log_flags.app_msg_send) {
+        for (const string &msg: msgs) {
             msg_printf(NULL, MSG_INFO,
-                "[app_msg_send] poll: deferred: %s", msgs[i].c_str()
+                "[app_msg_send] poll: deferred: %s", msg.c_str()
             );
         }
     }
@@ -1123,12 +1157,9 @@ bool MSG_QUEUE::timeout(double diff) {
 //
 void ACTIVE_TASK_SET::report_overdue() {
 #ifndef SIM
-    unsigned int i;
-    ACTIVE_TASK* atp;
     double mod = cc_config.max_overdue_days;
 
-    for (i=0; i<active_tasks.size(); i++) {
-        atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         double diff = (gstate.now - atp->result->report_deadline)/86400;
         if (diff <= 0) continue;
         if (mod>=0 && diff > mod) {
@@ -1184,15 +1215,13 @@ int ACTIVE_TASK::handle_upload_files() {
 }
 
 void ACTIVE_TASK_SET::handle_upload_files() {
-    for (unsigned int i=0; i<active_tasks.size(); i++) {
-        ACTIVE_TASK* atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         atp->handle_upload_files();
     }
 }
 
 bool ACTIVE_TASK_SET::want_network() {
-    for (unsigned int i=0; i<active_tasks.size(); i++) {
-        ACTIVE_TASK* atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         if (atp->want_network) return true;
     }
     return false;
@@ -1200,8 +1229,7 @@ bool ACTIVE_TASK_SET::want_network() {
 
 void ACTIVE_TASK_SET::network_available() {
 #ifndef SIM
-    for (unsigned int i=0; i<active_tasks.size(); i++) {
-        ACTIVE_TASK* atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         if (atp->want_network) {
             atp->send_network_available();
         }
@@ -1226,8 +1254,7 @@ void ACTIVE_TASK::upload_notify_app(const FILE_INFO* fip, const FILE_REF* frp) {
 // If any running apps are waiting for it, notify them
 //
 void ACTIVE_TASK_SET::upload_notify_app(FILE_INFO* fip) {
-    for (unsigned int i=0; i<active_tasks.size(); i++) {
-        ACTIVE_TASK* atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         RESULT* rp = atp->result;
         FILE_REF* frp = rp->lookup_file(fip);
         if (frp) {
@@ -1238,8 +1265,7 @@ void ACTIVE_TASK_SET::upload_notify_app(FILE_INFO* fip) {
 
 #ifndef SIM
 void ACTIVE_TASK_SET::init() {
-    for (unsigned int i=0; i<active_tasks.size(); i++) {
-        ACTIVE_TASK* atp = active_tasks[i];
+    for (ACTIVE_TASK* atp: active_tasks) {
         atp->init(atp->result);
         atp->scheduler_state = CPU_SCHED_PREEMPTED;
         atp->read_task_state_file();

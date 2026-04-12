@@ -1,25 +1,33 @@
 #! /usr/bin/env php
 <?php
 
-// submit a job for a BUDA (BOINC Universal Docker app) science app
-//
-// submit_buda [options] sci_app infile ...
-//
-// --buda_root dir      root of BUDA app hierarchy, default 'buda_apps'
-// --variant x          variant, default 'cpu'
-// --verbose
+// Submit a job for a BUDA (BOINC Universal Docker app) science app
+// Use for debugging, but not production;
+// it doesn't make a batch, so there's not association with user
+
+function usage() {
+    echo "Usage:
+submit_buda [options] sci_app infile ...
+
+--cmdline x         pass cmdline args to app
+--variant x         app variant, default 'intel_cpu'
+--verbose
+";
+    exit();
+}
 
 $buda_root = 'buda_apps';
 $infiles = [];
 $verbose = false;
-$variant = 'cpu';
+$variant = 'intel_cpu';
 $sci_app = null;
+$cmdline = null;
 
 for ($i=1; $i<$argc; $i++) {
-    if ($argv[$i] == '--buda_root') {
-        $buda_root = $argv[++$i];
-    } else if ($argv[$i] == '--variant') {
+    if ($argv[$i] == '--variant') {
         $variant = $argv[++$i];
+    } else if ($argv[$i] == '--cmdline') {
+        $cmdline = $argv[++$i];
     } else if ($argv[$i] == '--verbose') {
         $verbose = true;
     } else {
@@ -31,42 +39,43 @@ for ($i=1; $i<$argc; $i++) {
     }
 }
 
-$buda_dir = "$buda_root/$sci_app/$variant";
-if (!is_dir($buda_dir)) {
-    die("No version dir $buda_dir\n");
-}
-if (!file_exists("$buda_dir/template_in")) {
-    die("no input template\n");
-}
-if (!file_exists("$buda_dir/template_out")) {
-    die("no output template\n");
-}
-$file_list = file("$buda_dir/file_list");
-if (!$file_list) {
-    die("no file list\n");
+if (!$sci_app) {
+    usage();
 }
 
-$cmd = "bin/submit_job --templates $buda_dir/template_in $buda_dir/template_out buda";
-
-foreach ($file_list as $fname) {
-    $fname = trim($fname);
-    if (!file_exists("$buda_dir/$fname")) {
-        die("missing app file '$buda_dir/$fname'\n");
-    }
-    $cmd .= " $buda_dir/$fname";
+$app_dir = "$buda_root/$sci_app";
+$variant_dir = "$app_dir/$variant";
+if (!is_dir($variant_dir)) {
+    die("No version dir $variant_dir\n");
 }
+$variant_desc = json_decode(
+    file_get_contents("$variant_dir/variant.json")
+);
+
+$cmd = sprintf(
+    'bin/create_work --appname buda --wu_template %s --result_template %s',
+    "$app_dir/template_in",
+    "$app_dir/template_out"
+);
+
+$cmd .= sprintf(' --command_line "%s%s"',
+    $verbose?'--verbose ':'',
+    $cmdline?$cmdline:''
+);
 
 foreach ($infiles as $path) {
-    if (!file_exists("$path")) {
-        die("missing input file $path\n");
+    if (!file_exists($path)) {
+        die("missing input file '$path'\n");
     }
-    $cmd .= " $path";
+    $fname = basename($path);
+    system("cp $path `bin/dir_hier_path $fname`", $ret);
+    if ($ret) {
+        die("Couldn't stage input file $path");
+    }
+    $cmd .= " $fname";
 }
 
-if ($verbose) {
-    echo "cmd: $cmd\n";
-    $cmd .= " --verbose";
-}
+echo "command: $cmd\n";
 
 if (system($cmd, $ret) === false) {
     die("system($cmd) failed\n");
@@ -74,5 +83,7 @@ if (system($cmd, $ret) === false) {
 if ($ret) {
     die("$cmd returned $ret\n");
 }
+
+echo "job created\n";
 
 ?>

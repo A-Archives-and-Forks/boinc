@@ -233,9 +233,13 @@ bool PERS_FILE_XFER::poll() {
         case 0:
             fip->project->file_xfer_backoff(is_upload).file_xfer_succeeded();
             if (log_flags.file_xfer) {
+                // project files can have fip->nbytes == 0,
+                // so use last_bytes_xferred as size
+                //
                 msg_printf(
                     fip->project, MSG_INFO, "Finished %s of %s (%.0f bytes)",
-                    is_upload?"upload":"download", fip->name, fip->nbytes
+                    is_upload?"upload":"download",
+                    fip->name, (fip->nbytes != 0 ? fip->nbytes : last_bytes_xferred)
                 );
             }
             if (log_flags.file_xfer_debug) {
@@ -504,7 +508,6 @@ PERS_FILE_XFER_SET::PERS_FILE_XFER_SET(FILE_XFER_SET* p) {
 // started and deleting any that have finished
 //
 bool PERS_FILE_XFER_SET::poll() {
-    unsigned int i;
     bool action = false;
     static double last_time=0;
 
@@ -513,13 +516,13 @@ bool PERS_FILE_XFER_SET::poll() {
 
     // try to finish ones we've already started
     //
-    for (i=0; i<pers_file_xfers.size(); i++) {
-        if (!pers_file_xfers[i]->last_bytes_xferred) continue;
-        action |= pers_file_xfers[i]->poll();
+    for (PERS_FILE_XFER* pfx: pers_file_xfers) {
+        if (!pfx->last_bytes_xferred) continue;
+        action |= pfx->poll();
     }
-    for (i=0; i<pers_file_xfers.size(); i++) {
-        if (pers_file_xfers[i]->last_bytes_xferred) continue;
-        action |= pers_file_xfers[i]->poll();
+    for (PERS_FILE_XFER* pfx: pers_file_xfers) {
+        if (pfx->last_bytes_xferred) continue;
+        action |= pfx->poll();
     }
 
     if (action) gstate.set_client_state_dirty("pers_file_xfer_set poll");
@@ -559,9 +562,8 @@ int PERS_FILE_XFER_SET::remove(PERS_FILE_XFER* pfx) {
 // suspend all PERS_FILE_XFERs
 //
 void PERS_FILE_XFER_SET::suspend() {
-    unsigned int i;
-    for (i=0; i<pers_file_xfers.size(); i++) {
-        pers_file_xfers[i]->suspend();
+    for (PERS_FILE_XFER* pfx: pers_file_xfers) {
+        pfx->suspend();
     }
 }
 
@@ -569,11 +571,10 @@ void PERS_FILE_XFER_SET::suspend() {
 // (used when emerging from bandwidth quota suspension)
 //
 void PERS_FILE_XFER_SET::add_random_delay(double x) {
-    unsigned int i;
     double y = gstate.now + x*drand();
-    for (i=0; i<pers_file_xfers.size(); i++) {
-        if (y > pers_file_xfers[i]->next_request_time) {
-            pers_file_xfers[i]->next_request_time = y;
+    for (PERS_FILE_XFER* pfx: pers_file_xfers) {
+        if (y > pfx->next_request_time) {
+            pfx->next_request_time = y;
         }
     }
 }

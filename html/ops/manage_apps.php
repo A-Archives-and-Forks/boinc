@@ -96,7 +96,7 @@ function show_form($all) {
         "ID",
         "Name and description<br><small>Click for details</small>",
         "Created",
-        "weight<br><a href=https://github.com/BOINC/boinc/wiki/BackendPrograms#feeder><small>details</small></a>",
+        "weight<br><a href=https://github.com/BOINC/boinc/wiki/Daemons#feeder><small>details</small></a>",
         "shmem items",
         "HR type<br><a href=https://github.com/BOINC/boinc/wiki/Homogeneous-Redundancy><small>details</small></a>",
         "Adaptive replication<br><a href=https://github.com/BOINC/boinc/wiki/Adaptive-Replication><small>details</small></a>",

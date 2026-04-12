@@ -149,7 +149,7 @@ function sample_navbar(
     $inverse=false
         // white on black?
 ) {
-    global $master_url;
+    $master_url = master_url();
 
     $brand = "<a class=\"navbar-brand\" href=$master_url>".PROJECT."</a>";
     navbar_start($brand, $fixed, $inverse);
@@ -182,13 +182,44 @@ function sample_navbar(
             array(tra("CPU models"), $url_prefix."cpu_list.php"),
             array(tra("Computer types"), $url_prefix."host_stats.php"),
         );
+        navbar_menu(tra("Computing"), $x);
+
         if (defined('REMOTE_JOB_SUBMISSION') && REMOTE_JOB_SUBMISSION) {
-            if ($user && BoincUserSubmit::lookup_userid($user->id)) {
-                $x[] = array("Job submission", $url_prefix."submit.php");
+            $user_submit = null;
+            if ($user) {
+                $user_submit = BoincUserSubmit::lookup_userid($user->id);
+            }
+            if ($user_submit) {
+                $x = [];
                 $x[] = ["File sandbox", "sandbox.php"];
+                $x[] = ["Submit jobs", $url_prefix."submit.php"];
+                $x[] = ["Job status", $url_prefix."submit.php?action=show_user_batches"];
+                if ($user_submit->manage_all) {
+                    $x[] = ["Manage batches and apps", $url_prefix."submit.php?action=admin"];
+                    $x[] = ["Manage permissions", $url_prefix."manage_project.php"];
+                } else {
+                    // if user has manage permissions for apps, show links
+                    $usas = BoincUserSubmitApp::enum("user_id=$user->id");
+                    foreach ($usas as $usa) {
+                        if ($usa->manage) {
+                            $app = BoincApp::lookup_id($usa->app_id);
+                            if ($app->name == 'buda') {
+                                $x[] = [
+                                    'Manage BUDA apps',
+                                    'buda.php'
+                                ];
+                            } else {
+                                $x[] = [
+                                    "Manage $app->name",
+                                    "manage_project.php"
+                                ];
+                            }
+                        }
+                    }
+                }
+                navbar_menu(tra("Job submission"), $x);
             }
         }
-        navbar_menu(tra("Computing"), $x);
     }
 
     navbar_menu(tra("Community"), array(
@@ -291,8 +322,10 @@ function form_start($action, $method='get', $extra='') {
 }
 
 function form_input_hidden($name, $value) {
-    echo '<input type="hidden" name="'.$name.'" value="'.$value.'">
-    ';
+    echo sprintf(
+        '<input type="hidden" name="%s" value="%s">',
+        $name, $value
+    );
 }
 
 function form_focus($form_name, $field_name) {
@@ -366,7 +399,8 @@ function form_input_textarea($label, $name, $value='', $nrows=4) {
     );
 }
 
-// $items is either a string of <option> elements, or an array
+// $items is either a string of <option> elements,
+// or an array of [value, name] pairs
 //
 function form_select($label, $name, $items, $selected=null) {
     echo sprintf('
@@ -380,7 +414,7 @@ function form_select($label, $name, $items, $selected=null) {
     if (is_array($items)) {
         foreach ($items as $i) {
             echo sprintf(
-                '<option %s value=%s>%s</option>',
+                '<option %s value="%s">%s</option>',
                 ($i[0]==$selected)?'selected':'',
                 $i[0], $i[1]
             );
@@ -405,7 +439,7 @@ function form_select_multiple($label, $name, $items, $selected=null, $size=0) {
     );
     foreach ($items as $i) {
         echo sprintf(
-            '<option %s value=%s>%s</option>',
+            '<option %s value="%s">%s</option>',
             ($selected && in_array($i[0], $selected))?'selected':'',
             $i[0], $i[1]
         );
@@ -514,13 +548,14 @@ function form_checkbox($label, $name, $checked=false) {
         FORM_LEFT_CLASS, $label, FORM_RIGHT_CLASS
     );
     echo sprintf('
-        <input type="checkbox" name="%s" %s>
+              <input type="checkbox" name="%s" %s>
+           </div>
         </div>
         ', $name, $checked?"checked":""
     );
 }
 
-// 'select2' is replacement for select boxed:
+// 'select2' is replacement for multiple select with a nicer UI:
 // https://github.com/select2/select2
 //
 // To use it you must use this version of page_head():
@@ -540,7 +575,7 @@ function page_head_select2($title) {
 }
 
 // show a multi-select using select2.
-// $items is a list of [val, label] pairs;
+// $items is a list of [value, name] pairs;
 // $selected is the list of selected values.
 // $extra is e.g. id=foo
 //
@@ -555,7 +590,7 @@ function form_select2_multi($label, $name, $items, $selected=null, $extra='') {
     );
     foreach ($items as $i) {
         echo sprintf(
-            '<option %s value=%s>%s</option>',
+            '<option %s value="%s">%s</option>',
             ($selected && in_array($i[0], $selected))?'selected':'',
             $i[0], $i[1]
         );

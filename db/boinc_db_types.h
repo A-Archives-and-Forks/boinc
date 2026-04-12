@@ -22,8 +22,6 @@
 #ifndef _BOINC_DB_TYPES_
 #define _BOINC_DB_TYPES_
 
-#include <vector>
-
 #include "average.h"
 #include "opencl_boinc.h"
 #include "parse.h"
@@ -93,6 +91,7 @@ struct APP {
         // type of locality scheduling used by this app (see above)
     int n_size_classes;
         // for multi-size apps, number of size classes
+        // if use batch acceleration: 'accelerable' flag
     bool fraction_done_exact;
         // fraction done reported by app is accurate
 
@@ -102,6 +101,9 @@ struct APP {
     // not in DB:
     bool have_job;
     double size_class_quantiles[MAX_SIZE_CLASSES];
+    inline bool accelerable() {
+        return n_size_classes > 0;
+    }
 };
 
 // A version of an application.
@@ -346,7 +348,10 @@ struct HOST {
     char venue[256];        // home/work/school
     int nresults_today;     // results sent since midnight
     double avg_turnaround;  // recent average result turnaround time
-    char host_cpid[256];    // host cross-project ID
+    char host_cpid[256];    // external host cross-project ID
+        // the client generates an 'internal' host CPID;
+        // the server hashes this with email addr to avoid spoofing
+        // See https://github.com/BOINC/boinc/wiki/Host-identification
     char external_ip_addr[256]; // IP address seen by scheduler
     int _max_results_day;
         // MRD is dynamically adjusted to limit work sent to bad hosts.
@@ -361,10 +366,13 @@ struct HOST {
         // dynamic estimate of fraction of results
         // that fail validation
         // DEPRECATED
+        // if use batch acceleration: 'low turnaround time' flag
     char product_name[256];
     double gpu_active_frac;
     int p_ngpus;
     double p_gpu_fpops;
+    char misc[BLOB_SIZE];
+        // JSON description of GPUs, Docker etc.
 
     // the following items are passed in scheduler requests,
     // and used in the scheduler,
@@ -398,6 +406,9 @@ struct HOST {
     void fix_nans();
     void clear();
     bool get_opencl_cpu_prop(const char* platform, OPENCL_CPU_PROP&);
+    inline bool low_turnaround() {
+        return _error_rate > 0;
+    }
 };
 
 struct HOST_DELETED {
@@ -407,17 +418,22 @@ struct HOST_DELETED {
     void clear();
 };
 
-// values for file_delete state
+// values for
+// WORKUNIT::file_delete_state
+// RESULT::file_delete_state
+// TRANSITIONER_ITEM::res_file_delete_state
 // see html/inc/common_defs.inc
+//
 #define FILE_DELETE_INIT        0
 #define FILE_DELETE_READY       1
-    // set to this value only when we believe all files are uploaded
+    // WU is assimilated and all results are OVER,
+    // so we don't need output files anymore
 #define FILE_DELETE_DONE        2
-    // means the files were successfully deleted
+    // files were successfully deleted
 #define FILE_DELETE_ERROR       3
-    // Any error was returned while attempting to delete the file
+    // error in file deletion
 
-// values for assimilate_state
+// values for WORKUNIT::assimilate_state
 #define ASSIMILATE_INIT         0
 #define ASSIMILATE_READY        1
 #define ASSIMILATE_DONE         2
@@ -436,7 +452,7 @@ struct HOST_DELETED {
 #define WU_ERROR_CANCELLED                      16
 #define WU_ERROR_NO_CANONICAL_RESULT            32
 
-// bit fields of transition_flags; used for assigned jobs
+// bit fields of WORKUNIT::transitioner_flags; used for assigned jobs
 //
 #define TRANSITION_NONE             1
     // don't transition; used for broadcast jobs
@@ -490,12 +506,18 @@ struct WORKUNIT {
     int target_nresults;
         // try to get this many "viable" results,
         // i.e. candidate for canonical result.
+        // should always be at least min_quorum.
         // may be > min_quorum to get consensus quicker or reflect loss rate
-    int max_error_results;      // WU error if < #error results
-    int max_total_results;      // WU error if < #total results
-        // (need this in case results are never returned)
-    int max_success_results;    // WU error if < #success results
-        // without consensus (i.e. WU is nondeterministic)
+    int max_error_results;
+        // transitioner: if # results without client compute error exceeds this,
+        // mark WU as WU_ERROR_TOO_MANY_ERROR_RESULTS
+    int max_total_results;
+        // transitioner: if we need more instances but it would exceed this,
+        // mark WU as WU_ERROR_TOO_MANY_TOTAL_RESULTS
+    int max_success_results;
+        // validator: if #success results exceeds this without consensus
+        // (i.e. WU seems nondeterministic)
+        // mark WU as WU_ERROR_TOO_MANY_SUCCESS_RESULTS
     char result_template_file[64];
     int priority;
     char mod_time[20];
@@ -750,12 +772,28 @@ struct HOST_APP_VERSION {
         // for old clients (which don't report elapsed time)
         // we use this for CPU time stats
     int max_jobs_per_day;
-        // the actual limit is:
+        // send at most this # of jobs per day.
+        // does 0 mean no limit??
+        // if >1, it's scaled so the actual limit is:
         // for GPU versions:
         //   this times config.gpu_multiplier * #GPUs of this type
         // for CPU versions:
         //   this times #CPUs
+        // scheduler:
+        //      limit is enforced in sched_version.cpp:daily_quota_exceeded()
+        //      double if get success result (not necc. validated)
+        //          sched_result.cpp:got_good_result()
+        //      decrement (down to 1) if get failed result
+        //          sched_result.cpp:got_bad_result()
+        //      Used as a temp to enforce global limit?
+        // transitioner:
+        //      decrement if result times out
+        // validator:
+        //      increment if valid result
+        //      decrement if invalid result and > global limit (???)
+        //      set to 1 if init_result() returns LONG_TERM_FAIL
     int n_jobs_today;
+        // number of jobs sent today.
     AVERAGE_VAR turnaround;
         // the stats of turnaround time (received - sent)
         // (NOT normalized by wu.rsc_fpops_est)

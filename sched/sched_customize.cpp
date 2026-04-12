@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // https://boinc.berkeley.edu
-// Copyright (C) 2024 University of California
+// Copyright (C) 2026 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -291,7 +291,7 @@ static bool ati_check(COPROC_ATI& c, HOST_USAGE& hu,
 }
 
 static inline bool app_plan_ati(
-    SCHEDULER_REQUEST& sreq, char* plan_class, HOST_USAGE& hu
+    SCHEDULER_REQUEST& sreq, const char* plan_class, HOST_USAGE& hu
 ) {
     COPROC_ATI& c = sreq.coprocs.ati;
     if (!c.count) {
@@ -509,7 +509,7 @@ static bool cuda_check(COPROC_NVIDIA& c, HOST_USAGE& hu,
 // the following is for an app that uses an NVIDIA GPU
 //
 static inline bool app_plan_nvidia(
-    SCHEDULER_REQUEST& sreq, char* plan_class, HOST_USAGE& hu
+    SCHEDULER_REQUEST& sreq, const char* plan_class, HOST_USAGE& hu
 ) {
     COPROC_NVIDIA& c = sreq.coprocs.nvidia;
     if (!c.count) {
@@ -874,7 +874,7 @@ static inline bool app_plan_opencl(
 // use 1 or 2 CPUs
 
 static inline bool app_plan_vbox(
-    SCHEDULER_REQUEST& sreq, char* plan_class, HOST_USAGE& hu
+    SCHEDULER_REQUEST& sreq, const char* plan_class, HOST_USAGE& hu
 ) {
     bool can_use_multicore = true;
 
@@ -891,6 +891,11 @@ static inline bool app_plan_vbox(
         add_no_work_message("VirtualBox is not installed");
         return false;
     }
+    if (strstr(sreq.host.virtualbox_version, "unusable")) {
+        add_no_work_message("VirtualBox is not usable");
+        return false;
+    }
+
     int n, maj, min, rel;
     n = sscanf(sreq.host.virtualbox_version, "%d.%d.%d", &maj, &min, &rel);
     if ((n != 3) || (maj < 3) || (maj == 3 and min < 2)) {
@@ -960,7 +965,7 @@ static inline bool app_plan_vbox(
 }
 
 static inline bool app_plan_wsl(
-    SCHEDULER_REQUEST& sreq, char* plan_class, HOST_USAGE& hu
+    SCHEDULER_REQUEST& sreq, const char* plan_class, HOST_USAGE& hu
 ) {
     // no additional checks at the moment, just return true
     return true;
@@ -971,7 +976,7 @@ static inline bool app_plan_wsl(
 // See https://github.com/BOINC/boinc/wiki/AppPlan
 //
 bool app_plan(
-    SCHEDULER_REQUEST& sreq, char* plan_class, HOST_USAGE& hu,
+    SCHEDULER_REQUEST& sreq, const char* plan_class, HOST_USAGE& hu,
     const WORKUNIT* wu
 ) {
     char buf[256];
@@ -1044,11 +1049,8 @@ bool app_plan(
 }
 
 void handle_file_xfer_results() {
-    for (unsigned int i=0; i<g_request->file_xfer_results.size(); i++) {
-        RESULT& r = g_request->file_xfer_results[i];
-        log_messages.printf(MSG_NORMAL,
-            "completed file xfer %s\n", r.name
-        );
+    for (const RESULT& r: g_request->file_xfer_results) {
+        log_messages.printf(MSG_NORMAL, "completed file xfer %s\n", r.name);
         g_reply->result_acks.push_back(string(r.name));
     }
 }

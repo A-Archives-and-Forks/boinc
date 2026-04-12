@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // https://boinc.berkeley.edu
-// Copyright (C) 2022 University of California
+// Copyright (C) 2026 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -246,12 +246,11 @@ void ALL_PROJECTS_LIST::alpha_sort() {
 }
 
 void ALL_PROJECTS_LIST::clear() {
-    unsigned int i;
-    for (i=0; i<projects.size(); i++) {
-        delete projects[i];
+    for (PROJECT_LIST_ENTRY *p: projects) {
+        delete p;
     }
-    for (i=0; i<account_managers.size(); i++) {
-        delete account_managers[i];
+    for (AM_LIST_ENTRY *am: account_managers) {
+        delete am;
     }
     projects.clear();
     account_managers.clear();
@@ -606,6 +605,7 @@ int WORKUNIT::parse(XML_PARSER& xp) {
         if (xp.match_tag("/workunit")) return 0;
         if (xp.parse_str("name", name, sizeof(name))) continue;
         if (xp.parse_str("app_name", app_name, sizeof(app_name))) continue;
+        if (xp.parse_str("sub_appname", sub_appname, sizeof(sub_appname))) continue;
         if (xp.parse_int("version_num", version_num)) continue;
         if (xp.parse_double("rsc_fpops_est", rsc_fpops_est)) continue;
         if (xp.parse_double("rsc_fpops_bound", rsc_fpops_bound)) continue;
@@ -620,8 +620,9 @@ int WORKUNIT::parse(XML_PARSER& xp) {
 }
 
 void WORKUNIT::clear() {
-    safe_strcpy(name, "");
-    safe_strcpy(app_name, "");
+    name[0] = 0;
+    app_name[0] = 0;
+    sub_appname[0] = 0;
     version_num = 0;
     rsc_fpops_est = 0;
     rsc_fpops_bound = 0;
@@ -1038,25 +1039,24 @@ int CC_STATE::parse(XML_PARSER& xp) {
 }
 
 void CC_STATE::clear() {
-    unsigned int i;
-    for (i=0; i<projects.size(); i++) {
-        delete projects[i];
+    for (PROJECT *p: projects) {
+        delete p;
     }
     projects.clear();
-    for (i=0; i<apps.size(); i++) {
-        delete apps[i];
+    for (APP *app: apps) {
+        delete app;
     }
     apps.clear();
-    for (i=0; i<app_versions.size(); i++) {
-        delete app_versions[i];
+    for (APP_VERSION *avp: app_versions) {
+        delete avp;
     }
     app_versions.clear();
-    for (i=0; i<wus.size(); i++) {
-        delete wus[i];
+    for (WORKUNIT *wup: wus) {
+        delete wup;
     }
     wus.clear();
-    for (i=0; i<results.size(); i++) {
-        delete results[i];
+    for (RESULT *rp: results) {
+        delete rp;
     }
     results.clear();
     platforms.clear();
@@ -1067,18 +1067,22 @@ void CC_STATE::clear() {
 }
 
 PROJECT* CC_STATE::lookup_project(const char* url) {
-    unsigned int i;
-    for (i=0; i<projects.size(); i++) {
-        if (!strcmp(projects[i]->master_url, url)) return projects[i];
+    for (PROJECT *p: projects) {
+        if (!strcmp(p->master_url, url)) {
+            return p;
+        }
     }
     return 0;
 }
 
 APP* CC_STATE::lookup_app(PROJECT* project, const char* name) {
-    unsigned int i;
-    for (i=0; i<apps.size(); i++) {
-        if (apps[i]->project != project) continue;
-        if (!strcmp(apps[i]->name, name)) return apps[i];
+    for (APP* app: apps) {
+        if (app->project != project) {
+            continue;
+        }
+        if (!strcmp(app->name, name)) {
+            return app;
+        }
     }
     return 0;
 }
@@ -1087,14 +1091,13 @@ APP_VERSION* CC_STATE::lookup_app_version(
     PROJECT* project, APP* app,
     char* platform, int version_num, char* plan_class
 ) {
-    unsigned int i;
-    for (i=0; i<app_versions.size(); i++) {
-        if (app_versions[i]->project != project) continue;
-        if (app_versions[i]->app != app) continue;
-        if (strcmp(app_versions[i]->platform, platform)) continue;
-        if (app_versions[i]->version_num != version_num) continue;
-        if (strcmp(app_versions[i]->plan_class, plan_class)) continue;
-        return app_versions[i];
+    for (APP_VERSION *avp: app_versions) {
+        if (avp->project != project) continue;
+        if (avp->app != app) continue;
+        if (strcmp(avp->platform, platform)) continue;
+        if (avp->version_num != version_num) continue;
+        if (strcmp(avp->plan_class, plan_class)) continue;
+        return avp;
     }
     return 0;
 }
@@ -1103,13 +1106,12 @@ APP_VERSION* CC_STATE::lookup_app_version(
     PROJECT* project, APP* app,
     int version_num, char* plan_class
 ) {
-    unsigned int i;
-    for (i=0; i<app_versions.size(); i++) {
-        if (app_versions[i]->project != project) continue;
-        if (app_versions[i]->app != app) continue;
-        if (app_versions[i]->version_num != version_num) continue;
-        if (strcmp(app_versions[i]->plan_class, plan_class)) continue;
-        return app_versions[i];
+    for (APP_VERSION *avp: app_versions) {
+        if (avp->project != project) continue;
+        if (avp->app != app) continue;
+        if (avp->version_num != version_num) continue;
+        if (strcmp(avp->plan_class, plan_class)) continue;
+        return avp;
     }
     return 0;
 }
@@ -1117,55 +1119,59 @@ APP_VERSION* CC_STATE::lookup_app_version(
 APP_VERSION* CC_STATE::lookup_app_version(
     PROJECT* project, APP* app, int version_num
 ) {
-    unsigned int i;
-    for (i=0; i<app_versions.size(); i++) {
-        if (app_versions[i]->project != project) continue;
-        if (app_versions[i]->app != app) continue;
-        if (app_versions[i]->version_num != version_num) continue;
-        return app_versions[i];
+    for (APP_VERSION *avp: app_versions) {
+        if (avp->project != project) continue;
+        if (avp->app != app) continue;
+        if (avp->version_num != version_num) continue;
+        return avp;
     }
     return 0;
 }
 
 WORKUNIT* CC_STATE::lookup_wu(PROJECT* project, const char* name) {
-    unsigned int i;
-    for (i=0; i<wus.size(); i++) {
-        if (wus[i]->project != project) continue;
-        if (!strcmp(wus[i]->name, name)) return wus[i];
+    for (WORKUNIT *wup: wus) {
+        if (wup->project != project) {
+            continue;
+        }
+        if (!strcmp(wup->name, name)) {
+            return wup;
+        }
     }
     return 0;
 }
 
 RESULT* CC_STATE::lookup_result(PROJECT* project, const char* name) {
-    unsigned int i;
-    for (i=0; i<results.size(); i++) {
-        if (results[i]->project != project) continue;
-        if (!strcmp(results[i]->name, name)) return results[i];
+    for (RESULT *rp: results) {
+        if (rp->project != project) continue;
+        if (!strcmp(rp->name, name)) {
+            return rp;
+        }
     }
     return 0;
 }
 
 RESULT* CC_STATE::lookup_result(const char* url, const char* name) {
-    unsigned int i;
-    for (i=0; i<results.size(); i++) {
-        if (strcmp(results[i]->project_url, url)) continue;
-        if (!strcmp(results[i]->name, name)) return results[i];
+    for (RESULT *rp: results) {
+        if (strcmp(rp->project_url, url)) {
+            continue;
+        }
+        if (!strcmp(rp->name, name)) {
+            return rp;
+        }
     }
     return 0;
 }
 
 void PROJECTS::clear() {
-    unsigned int i;
-    for (i=0; i<projects.size(); i++) {
-        delete projects[i];
+    for (PROJECT *p: projects) {
+        delete p;
     }
     projects.clear();
 }
 
 void DISK_USAGE::clear() {
-    unsigned int i;
-    for (i=0; i<projects.size(); i++) {
-        delete projects[i];
+    for (PROJECT *p: projects) {
+        delete p;
     }
     projects.clear();
     d_free = 0;
@@ -1175,9 +1181,8 @@ void DISK_USAGE::clear() {
 }
 
 void RESULTS::clear() {
-    unsigned int i;
-    for (i=0; i<results.size(); i++) {
-        delete results[i];
+    for (RESULT *rp: results) {
+        delete rp;
     }
     results.clear();
 }
@@ -1187,9 +1192,8 @@ FILE_TRANSFERS::FILE_TRANSFERS() {
 }
 
 void FILE_TRANSFERS::clear() {
-    unsigned int i;
-    for (i=0; i<file_transfers.size(); i++) {
-        delete file_transfers[i];
+    for (FILE_TRANSFER *ftp: file_transfers) {
+        delete ftp;
     }
     file_transfers.clear();
 }
@@ -1199,9 +1203,8 @@ MESSAGES::MESSAGES() {
 }
 
 void MESSAGES::clear() {
-    unsigned int i;
-    for (i=0; i<messages.size(); i++) {
-        delete messages[i];
+    for (MESSAGE *m: messages) {
+        delete m;
     }
     messages.clear();
 }
@@ -1213,9 +1216,8 @@ NOTICES::NOTICES() {
 void NOTICES::clear() {
     complete = false;
     received = false;
-    unsigned int i;
-    for (i=0; i<notices.size(); i++) {
-        delete notices[i];
+    for (NOTICE *np: notices) {
+        delete np;
     }
     notices.clear();
 }

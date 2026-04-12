@@ -1,6 +1,6 @@
 // This file is part of BOINC.
-// http://boinc.berkeley.edu
-// Copyright (C) 2023 University of California
+// https://boinc.berkeley.edu
+// Copyright (C) 2026 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -55,6 +55,7 @@
 #include "synch.h"
 #include "util.h"
 
+#include "buda.h"
 #include "handle_request.h"
 #include "sched_config.h"
 #include "sched_files.h"
@@ -344,7 +345,8 @@ inline static const char* get_remote_addr() {
     return r ? r : "?.?.?.?";
 }
 
-#if 0       // performance test for XML parsing (use a large request)
+#if defined(XML_PERF_TEST)
+// performance test for XML parsing (use a large request)
 int main(int, char**) {
     SCHEDULER_REQUEST sreq;
     FILE* f = fopen("req", "r");
@@ -356,10 +358,11 @@ int main(int, char**) {
         fseek(f, 0, SEEK_SET);
     }
 }
+#elif defined(PLAN_CLASS_TEST)
+    // main() defined in plan_class_spec.cpp
+#elif defined(BUDA_TEST)
+    // main() defined in buda.cpp
 #else
-
-#if !defined(PLAN_CLASS_TEST)
-
 int main(int argc, char** argv) {
     FILE* fin, *fout;
     int i, retval;
@@ -500,6 +503,7 @@ int main(int argc, char** argv) {
     }
     strip_whitespace(code_sign_key);
 
+    buda_init();
 
     g_pid = getpid();
 #ifdef _USING_FCGI_
@@ -651,7 +655,6 @@ done:
     }
 }
 #endif
-#endif
 
 // the following stuff is here because if you put it in sched_limit.cpp
 // you get "ssp undefined" in programs other than cgi
@@ -672,14 +675,14 @@ void JOB_LIMIT::print_log() {
 void JOB_LIMITS::print_log() {
     log_messages.printf(MSG_NORMAL, "[quota] Overall limits on jobs in progress:\n");
     project_limits.print_log();
-    for (unsigned int i=0; i<app_limits.size(); i++) {
-        if (app_limits[i].any_limit()) {
-            APP* app = ssp->lookup_app_name(app_limits[i].app_name);
+    for (JOB_LIMIT& jl: app_limits) {
+        if (jl.any_limit()) {
+            APP* app = ssp->lookup_app_name(jl.app_name);
             if (!app) continue;
             log_messages.printf(MSG_NORMAL,
                 "[quota] Limits for %s:\n", app->name
             );
-            app_limits[i].print_log();
+            jl.print_log();
         }
     }
 }

@@ -126,11 +126,17 @@ void show_message(
         x = "---";
     }
 
-    // Construct message to be logged/displayed
-    snprintf(evt_message, sizeof(evt_message), "%s [%s] %s\n", time_string,  x, message);
-
     // print message to the console
+    snprintf(evt_message, sizeof(evt_message),
+        "%s [%s] %s\n", time_string,  x, message
+    );
     printf("%s", evt_message);
+    if (link) {
+        snprintf(event_msg, sizeof(event_msg),
+            "%s [%s] See %s\n", time_string,  x, link
+        );
+        printf("%s", event_msg);
+    }
 
 #ifdef _WIN32
     // MSVCRT doesn't support line buffered streams
@@ -161,8 +167,9 @@ void msg_printf(PROJ_AM *p, int priority, const char *fmt, ...) {
 
 void msg_printf_notice(
     PROJ_AM *p,
-    bool is_html,   // msg has HTML tags; don't XML-escape it
-    const char* link, const char *fmt, ...
+    bool is_html,       // msg has HTML tags; don't XML-escape it
+    const char* link,   // where 'more info' goes to
+    const char *fmt, ...
 ) {
     char buf[8192];  // output can be much longer than format
     va_list ap;
@@ -260,8 +267,7 @@ void MESSAGE_DESCS::cleanup() {
 
 string app_list_string(PROJECT* p) {
     string app_list;
-    for (unsigned int i=0; i<gstate.apps.size(); i++) {
-        APP* app = gstate.apps[i];
+    for (APP* app: gstate.apps) {
         if (app->project != p) continue;
         if (!app_list.empty()) {
             app_list += ", ";

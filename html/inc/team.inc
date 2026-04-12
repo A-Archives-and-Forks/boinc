@@ -213,10 +213,10 @@ function display_team_members($team, $offset, $sort_by) {
     $admins = BoincTeamAdmin::enum("teamid=$team->id");
 
     // there aren't indices to support sorting by credit.
-    // set the following variable to disable sorted output.
+    // set the following variable to 1 to disable sorted output.
     // (though since caching is generally used this shouldn't be needed)
     //
-    $nosort = false;
+    $nosort = 0;
 
     if ($sort_by == "total_credit") {
         $sort_clause = "total_credit desc";
@@ -253,8 +253,11 @@ function display_team_members($team, $offset, $sort_by) {
     $a[] = "";
     row_heading_array($x, $a);
 
-    $cache_args = "teamid=".$team->id."&mosort=".$nosort."&order=".$sort_clause."&limit=".$offset."_".$n;
-    $users = unserialize(get_cached_data(TEAM_PAGE_TTL, $cache_args));
+    $cache_args = "teamid=".$team->id."&nosort=".$nosort."&order=".$sort_clause."&limit=".$offset."_".$n;
+    $users = get_cached_data(TEAM_PAGE_TTL, $cache_args);
+    if ($users) {
+        $users = unserialize($users);
+    }
     if (!$users) {
         if ($nosort) {
             $users = BoincUser::enum("teamid=$team->id limit $offset,$n");
@@ -460,7 +463,7 @@ function user_erase_team_delta($user) {
 }
 
 function team_edit_form($team, $label, $url) {
-    global $team_types, $recaptcha_public_key;
+    global $team_types;
     echo "<form method=post action=$url>\n";
     if ($team) {
         echo "<input type=hidden name=teamid value=$team->id>\n";
@@ -507,10 +510,10 @@ function team_edit_form($team, $label, $url) {
     row2(tra("Accept new members?"), "<input type=checkbox name=joinable $x>");
     // Check if we're using reCaptcha to prevent spam accounts
     //
-    if (!$team && $recaptcha_public_key) {
+    if (!$team && recaptcha_public_key()) {
         row2(
             "",
-            boinc_recaptcha_get_html($recaptcha_public_key)
+            boinc_recaptcha_get_html(recaptcha_public_key())
         );
     }
     row2("",

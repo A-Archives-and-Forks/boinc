@@ -34,7 +34,7 @@ if (!defined('REMOTE_PROJECTS_TTL')) {
 //
 function get_other_projects($user) {
     $cpid = md5($user->cross_project_id . $user->email_addr);
-    $url = "http://boinc.netsoft-online.com/get_user.php?cpid=".$cpid;
+    $url = "https://api.free-dc.org/get_user.php?cpid=$cpid";
 
     // Check the cache for that URL
     //
@@ -51,7 +51,7 @@ function get_other_projects($user) {
             $xml_object = null;
             $f = @file_get_contents($url);
             if ($f) {
-                $xml_object = @simplexml_load_string($f);
+                $xml_object = @safe_simplexml_load_string($f);
             }
             ini_set('default_socket_timeout', $old_timeout);
             if (!$xml_object) {
@@ -67,7 +67,7 @@ function get_other_projects($user) {
             $rawxml = @curl_exec($ch);
             $xml_object = null;
             if ($rawxml) {
-                $xml_object = @simplexml_load_string($rawxml);
+                $xml_object = @safe_simplexml_load_string($rawxml);
             }
             curl_close($ch);
             if (!$xml_object) {
@@ -331,6 +331,14 @@ function show_preference_links() {
     if (!NO_COMPUTING) {
         row2(tra("Preferences for this project"),
             "<a href=\"prefs.php?subset=project\">".tra("%1 preferences", PROJECT)."</a>"
+        );
+    }
+    if (parse_bool(get_config(), 'keyword_sched')) {
+        row2(
+            tra('What types of jobs to run'),
+            sprintf('<a href=kw_prefs.php>%s</a>',
+                tra('Science and location preferences')
+            )
         );
     }
 }

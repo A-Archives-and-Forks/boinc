@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // https://boinc.berkeley.edu
-// Copyright (C) 2024 University of California
+// Copyright (C) 2026 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -286,12 +286,12 @@ bool PLAN_CLASS_SPEC::check(
         }
         downcase_string(buf);
 
-        for (unsigned int i=0; i<cpu_features.size(); i++) {
-            if (!strstr(buf, cpu_features[i].c_str())) {
+        for (const string &s: cpu_features) {
+            if (!strstr(buf, s.c_str())) {
                 if (config.debug_version_select) {
                     log_messages.printf(MSG_NORMAL,
                         "[version] plan_class_spec: CPU lacks feature '%s' (got '%s')\n",
-                        cpu_features[i].c_str(), sreq.host.p_features
+                        s.c_str(), sreq.host.p_features
                     );
                 }
                 return false;
@@ -306,20 +306,6 @@ bool PLAN_CLASS_SPEC::check(
             log_messages.printf(MSG_NORMAL,
                 "[version] plan_class_spec: not enough CPUs: %d < %f\n",
                 g_wreq->effective_ncpus, min_ncpus
-            );
-        }
-        return false;
-    }
-
-    // host summary
-    //
-    if (have_host_summary_regex
-        && regexec(&(host_summary_regex), g_reply->host.serialnum, 0, NULL, 0)
-    ) {
-        if (config.debug_version_select) {
-            log_messages.printf(MSG_NORMAL,
-                "[version] plan_class_spec: host summary '%s' didn't match regexp\n",
-                g_reply->host.serialnum
             );
         }
         return false;
@@ -466,12 +452,17 @@ bool PLAN_CLASS_SPEC::check(
             return false;
         }
 
-        // host must have VirtualBox 3.2 or later
-        //
         if (strlen(sreq.host.virtualbox_version) == 0) {
             add_no_work_message("VirtualBox is not installed");
             return false;
         }
+        if (strstr(sreq.host.virtualbox_version, "unusable")) {
+            add_no_work_message("VirtualBox is not usable");
+            return false;
+        }
+
+        // check version min/max
+        //
         int n, maj, min, rel;
         n = sscanf(sreq.host.virtualbox_version, "%d.%d.%d", &maj, &min, &rel);
         if (n != 3) {
@@ -600,6 +591,14 @@ bool PLAN_CLASS_SPEC::check(
             if (strlen(sreq.host.docker_version) == 0) {
                 add_no_work_message("Docker not present");
                 return false;
+            }
+            if (strstr(sreq.host.os_name, "Darwin")) {
+                if (sreq.core_client_version < 80206) {
+                    add_no_work_message(
+                        "Docker jobs need 8.2.6+ client"
+                    );
+                    return false;
+                }
             }
         }
     }
@@ -846,7 +845,7 @@ bool PLAN_CLASS_SPEC::check(
 
     // Apple GPU
 
-    } else if (!strcmp(gpu_type, "apple_cpu")) {
+    } else if (!strcmp(gpu_type, "apple")) {
         COPROC& cp = sreq.coprocs.apple_gpu;
         cpp = &cp;
 
@@ -1120,12 +1119,12 @@ bool PLAN_CLASS_SPEC::check(
 }
 
 bool PLAN_CLASS_SPECS::check(
-    SCHEDULER_REQUEST& sreq, char* plan_class, HOST_USAGE& hu,
+    SCHEDULER_REQUEST& sreq, const char* plan_class, HOST_USAGE& hu,
     const WORKUNIT* wu
 ) {
-    for (unsigned int i=0; i<classes.size(); i++) {
-        if (!strcmp(classes[i].name, plan_class)) {
-            return classes[i].check(sreq, hu, wu);
+    for (PLAN_CLASS_SPEC& spec: classes) {
+        if (!strcmp(spec.name, plan_class)) {
+            return spec.check(sreq, hu, wu);
         }
     }
     log_messages.printf(MSG_CRITICAL, "Unknown plan class: %s\n", plan_class);
@@ -1133,12 +1132,12 @@ bool PLAN_CLASS_SPECS::check(
 }
 
 bool PLAN_CLASS_SPECS::wu_is_infeasible(
-    char* plan_class_name, const WORKUNIT* wu
+    const char* plan_class_name, const WORKUNIT* wu
 ) {
-    if(wu_restricted_plan_class) {
-        for (unsigned int i=0; i<classes.size(); i++) {
-            if(!strcmp(classes[i].name, plan_class_name)) {
-                return wu_is_infeasible_for_plan_class(&classes[i], wu);
+    if (wu_restricted_plan_class) {
+        for (const PLAN_CLASS_SPEC& spec: classes) {
+            if(!strcmp(spec.name, plan_class_name)) {
+                return wu_is_infeasible_for_plan_class(&spec, wu);
             }
         }
     }
@@ -1201,14 +1200,6 @@ int PLAN_CLASS_SPEC::parse(XML_PARSER& xp) {
                 return ERR_XML_PARSE;
             }
             have_cpu_model_regex = true;
-            continue;
-        }
-        if (xp.parse_str("host_summary_regex", buf, sizeof(buf))) {
-            if (regcomp(&(host_summary_regex), buf, REG_EXTENDED|REG_NOSUB) ) {
-                log_messages.printf(MSG_CRITICAL, "BAD HOST SUMMARY REGEXP: %s\n", buf);
-                return ERR_XML_PARSE;
-            }
-            have_host_summary_regex = true;
             continue;
         }
         if (xp.parse_int("user_id", user_id)) continue;
@@ -1330,7 +1321,6 @@ PLAN_CLASS_SPEC::PLAN_CLASS_SPEC() {
     avg_ncpus = 0;
     min_core_client_version = 0;
     max_core_client_version = 0;
-    have_host_summary_regex = false;
     user_id = 0;
     infeasible_random = 0;
     min_wu_id=0;
@@ -1408,13 +1398,13 @@ int main() {
         sreq.coprocs.ati.count = 0;
     }
 
-    for (unsigned int i=0; i<pcs.classes.size(); i++) {
+    for (const PLAN_CLASS_SPEC& spec: pcs.classes) {
         WORKUNIT wu;
         wu.id = 100;
         wu.batch = 100;
-        bool b = pcs.check(sreq, pcs.classes[i].name, hu, &wu);
+        bool b = pcs.check(sreq, spec.name, hu, &wu);
         if (b) {
-            printf("%s: check succeeded\n", pcs.classes[i].name);
+            printf("%s: check succeeded\n", spec.name);
             printf("\tgpu_usage: %f\n\tgpu_ram: %fMB\n\tavg_ncpus: %f\n\tprojected_flops: %fG\n\tpeak_flops: %fG\n",
                 hu.gpu_usage,
                 hu.gpu_ram/1e6,
@@ -1423,7 +1413,7 @@ int main() {
                 hu.peak_flops/1e9
             );
         } else {
-            printf("%s: check failed\n", pcs.classes[i].name);
+            printf("%s: check failed\n", spec.name);
         }
     }
 }

@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
+
 # This file is part of BOINC.
 # https://boinc.berkeley.edu
-# Copyright (C) 2025 University of California
+# Copyright (C) 2026 University of California
 #
 # BOINC is free software; you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License
@@ -38,7 +40,7 @@ linux_apps_list = [
     './samples/example_app/ucn',
     './samples/example_app/uc2_graphics',
     './samples/example_app/slide_show',
-    './samples/multi_thread/multi_thread',
+    './samples/multi_thread/multi_thread*pc-linux-gnu',
     './samples/sleeper/sleeper',
     './samples/vboxmonitor/vboxmonitor',
     './samples/vboxwrapper/vboxwrapper*pc-linux-gnu',
@@ -70,14 +72,14 @@ mingw_apps_vcpkg_list = [
     './samples/example_app/ucn.exe',
     './samples/example_app/uc2_graphics.exe',
     './samples/example_app/slide_show.exe',
-    './samples/multi_thread/multi_thread.exe',
+    './samples/multi_thread/multi_thread*.exe',
     './samples/sleeper/sleeper.exe',
     './samples/worker/worker*.exe',
     './samples/wrapper/wrapper*.exe',
     './samples/wrappture/wrappture_example.exe',
     './samples/wrappture/fermi.exe',
     './samples/sporadic/sporadic.exe',
-    './samples/wsl_wrapper/wsl_wrapper.exe',
+    './samples/wsl_wrapper/wsl_wrapper*.exe',
     './samples/docker_wrapper/docker_wrapper*.exe',
 ]
 
@@ -158,8 +160,9 @@ windows_apps_list = [
     './win_build/Build/x64/Release/test*.exe',
     './win_build/Build/x64/Release/wrappture*.exe',
     './win_build/Build/x64/Release/crypt_prog.exe',
-    './win_build/Build/x64/Release/wsl_wrapper.exe',
+    './win_build/Build/x64/Release/wsl_wrapper*.exe',
     './win_build/Build/x64/Release/docker_wrapper*.exe',
+    './win_build/Build/x64/Release/cudart*.dll',
     './win_build/Build/ARM64/Release/htmlgfx*.exe',
     './win_build/Build/ARM64/Release/wrapper*.exe',
     './win_build/Build/ARM64/Release/vboxwrapper*.exe',
@@ -173,7 +176,7 @@ windows_apps_list = [
     './win_build/Build/ARM64/Release/test*.exe',
     './win_build/Build/ARM64/Release/wrappture*.exe',
     './win_build/Build/ARM64/Release/crypt_prog.exe',
-    './win_build/Build/ARM64/Release/wsl_wrapper.exe',
+    './win_build/Build/ARM64/Release/wsl_wrapper*.exe',
     './win_build/Build/ARM64/Release/docker_wrapper*.exe',
 ]
 
@@ -213,23 +216,6 @@ windows_installer_list = [
     './win_build/Build/ARM64/Release/installer_setup.exe',
 ]
 
-wasm_client_list = [
-    './client/boinc_client.wasm',
-    './client/boinc_client.js',
-    './client/boinc.html',
-    './samples/wasm/index.html',
-]
-
-wasm_client_debug_folder_list = [
-    'lib/*.cpp',
-    'lib/*.h',
-    'client/*.cpp',
-    'client/*.h',
-    'client/boinc_client.html',
-    'client/boinc_client.js',
-    'client/boinc_client.wasm',
-]
-
 macos_manager_list = [
     'mac_build/build/Deployment/AddRemoveUser',
     'mac_build/build/Deployment/BOINC\ Installer.app',
@@ -248,11 +234,11 @@ macos_manager_list = [
     'mac_build/build/Deployment/setprojectgrp',
     'mac_build/build/Deployment/switcher',
     'mac_build/build/Deployment/detect_rosetta_cpu',
+    'mac_build/build/Deployment/Run_Podman',
+    'mac_RemovePodman/build/Release/RemovePodman',
 ]
 
 macos_apps_list = [
-    'zip/build/Deployment/boinc_zip_test',
-    'zip/build/Deployment/testzlibconflict',
     'samples/docker_wrapper/build/Deployment/docker_wrapper',
     'samples/mac_build/build/Deployment/UC2-apple-darwin',
     'samples/mac_build/build/Deployment/UC2_graphics-apple-darwin',
@@ -289,7 +275,6 @@ macos_apps_arm64_list = [
 
 logs_list = [
     'config.log',
-    '3rdParty/wasm/vcpkg/buildtrees/*.log',
     '3rdParty/linux/vcpkg/buildtrees/*.log',
     '3rdParty/osx/vcpkg/buildtrees/*.log',
     '3rdParty/android/vcpkg/buildtrees/*.log',
@@ -317,11 +302,26 @@ def prepare_linux_client(target_directory):
 def prepare_linux_client_vcpkg(target_directory):
     prepare_7z_archive('linux_client-vcpkg', target_directory, linux_client_list)
 
+def prepare_linux_client_vcpkg_arm64(target_directory):
+    prepare_7z_archive('linux_client-vcpkg-arm64', target_directory, linux_client_list)
+
+def prepare_linux_client_vcpkg_armhf(target_directory):
+    prepare_7z_archive('linux_client-vcpkg-armhf', target_directory, linux_client_list)
+
 def prepare_linux_apps(target_directory):
     prepare_7z_archive('linux_apps', target_directory, linux_apps_list)
 
 def prepare_linux_apps_arm64(target_directory):
     prepare_7z_archive('linux_apps-arm64', target_directory, linux_apps_list)
+
+def prepare_linux_apps_armhf(target_directory):
+    prepare_7z_archive('linux_apps-armhf', target_directory, linux_apps_list)
+
+def prepare_linux_apps_vcpkg_arm64(target_directory):
+    prepare_7z_archive('linux_apps-vcpkg-arm64', target_directory, linux_apps_list)
+
+def prepare_linux_apps_vcpkg_armhf(target_directory):
+    prepare_7z_archive('linux_apps-vcpkg-armhf', target_directory, linux_apps_list)
 
 def prepare_linux_apps_vcpkg(target_directory):
     prepare_7z_archive('linux_apps-vcpkg', target_directory, linux_apps_list)
@@ -334,6 +334,12 @@ def prepare_linux_manager_with_webview(target_directory):
 
 def prepare_linux_manager_with_webview_vcpkg(target_directory):
     prepare_7z_archive('linux_manager-with-webview-vcpkg', target_directory, linux_manager_list)
+
+def prepare_linux_manager_with_webview_vcpkg_arm64(target_directory):
+    prepare_7z_archive('linux_manager-with-webview-vcpkg-arm64', target_directory, linux_manager_list)
+
+def prepare_linux_manager_with_webview_vcpkg_armhf(target_directory):
+    prepare_7z_archive('linux_manager-with-webview-vcpkg-armhf', target_directory, linux_manager_list)
 
 def prepare_linux_manager_without_webview(target_directory):
     prepare_7z_archive('linux_manager-without-webview', target_directory, linux_manager_list)
@@ -359,12 +365,6 @@ def prepare_win_manager(target_directory):
 def prepare_win_installer(target_directory):
     prepare_7z_archive('win_installer', target_directory, windows_installer_list)
 
-def prepare_wasm_client(target_directory):
-    prepare_7z_archive('wasm_client', target_directory, wasm_client_list)
-
-def prepare_wasm_client_debug(target_directory):
-    prepare_7z_archive('wasm_client-debug', target_directory, wasm_client_debug_folder_list)
-
 def prepare_macos_apps(target_directory):
     prepare_7z_archive('macos_manager', target_directory, macos_manager_list)
     prepare_7z_archive('macos_apps', target_directory, macos_apps_list)
@@ -378,27 +378,32 @@ def prepare_logs(target_directory):
     prepare_7z_archive('logs', target_directory, logs_list)
 
 boinc_types = {
-    'linux_client': prepare_linux_client,
-    'linux_client-vcpkg': prepare_linux_client_vcpkg,
+    'android_apps': prepare_android_apps,
     'linux_apps': prepare_linux_apps,
     'linux_apps-arm64': prepare_linux_apps_arm64,
+    'linux_apps-armhf': prepare_linux_apps_armhf,
     'linux_apps-vcpkg': prepare_linux_apps_vcpkg,
+    'linux_apps-vcpkg-arm64': prepare_linux_apps_vcpkg_arm64,
+    'linux_apps-vcpkg-armhf': prepare_linux_apps_vcpkg_armhf,
+    'linux_client': prepare_linux_client,
+    'linux_client-vcpkg': prepare_linux_client_vcpkg,
+    'linux_client-vcpkg-arm64': prepare_linux_client_vcpkg_arm64,
+    'linux_client-vcpkg-armhf': prepare_linux_client_vcpkg_armhf,
     'linux_manager': prepare_linux_manager,
     'linux_manager-with-webview': prepare_linux_manager_with_webview,
     'linux_manager-with-webview-vcpkg': prepare_linux_manager_with_webview_vcpkg,
+    'linux_manager-with-webview-vcpkg-arm64': prepare_linux_manager_with_webview_vcpkg_arm64,
+    'linux_manager-with-webview-vcpkg-armhf': prepare_linux_manager_with_webview_vcpkg_armhf,
     'linux_manager-without-webview': prepare_linux_manager_without_webview,
-    'win_apps-mingw': prepare_win_apps_mingw,
-    'win_apps-mingw-vcpkg': prepare_win_apps_mingw_vcpkg,
-    'android_apps': prepare_android_apps,
-    'win_apps': prepare_win_apps,
-    'win_client': prepare_win_client,
-    'win_manager': prepare_win_manager,
-    'win_installer': prepare_win_installer,
-    'wasm_client': prepare_wasm_client,
-    'wasm_client-debug': prepare_wasm_client_debug,
+    'logs': prepare_logs,
     'macos_manager': prepare_macos_apps,
     'macos_samples-makefile': prepare_macos_makefile_apps,
-    'logs': prepare_logs,
+    'win_apps': prepare_win_apps,
+    'win_apps-mingw': prepare_win_apps_mingw,
+    'win_apps-mingw-vcpkg': prepare_win_apps_mingw_vcpkg,
+    'win_client': prepare_win_client,
+    'win_installer': prepare_win_installer,
+    'win_manager': prepare_win_manager,
 }
 
 if (len(sys.argv) != 2):

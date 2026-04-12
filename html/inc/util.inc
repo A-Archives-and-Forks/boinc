@@ -29,26 +29,24 @@ require_once("../inc/translation.inc");
 require_once("../inc/profile.inc");
 require_once("../inc/bootstrap.inc");
 
-// parse config.xml (do it here for efficiency)
-//
-global $config;
-$config = get_config();
+define('JQUERY_URL', 'https://code.jquery.com/jquery-3.7.1.slim.min.js');
 
-global $master_url;
-$master_url = parse_config($config , "<master_url>");
-
-// the above 'globals' are solely for Drupal; see
-// https://stackoverflow.com/questions/29216392/scope-of-a-global-variable-in-drupal-module
-
-$recaptcha_public_key = parse_config($config, "<recaptcha_public_key>");
-$recaptcha_private_key = parse_config($config, "<recaptcha_private_key>");
+function master_url() {
+    return parse_config(get_config() , "<master_url>");
+}
+function recaptcha_public_key() {
+    return parse_config(get_config(), "<recaptcha_public_key>");
+}
+function recaptcha_private_key() {
+    return parse_config(get_config(), "<recaptcha_private_key>");
+}
 
 // Set parameters to defaults if not defined in config.xml
 
-$x = parse_config($config, "<user_country>");
+$x = parse_config(get_config(), "<user_country>");
 define('USER_COUNTRY', ($x===null)?1:(int)$x);
 
-$x = parse_config($config, "<user_url>");
+$x = parse_config(get_config(), "<user_url>");
 define('USER_URL', ($x===null)?1:(int)$x);
 
 // Set parameters to defaults if not defined in project.inc
@@ -142,11 +140,6 @@ $caching = false;
     // if set, we're writing to a file rather than to client
 $did_page_head = false;
 
-define('KILO', 1024);
-define('MEGA', 1024*KILO);
-define('GIGA', 1024*MEGA);
-define('TERA', 1024*GIGA);
-
 // return true if this page is HTTPS
 //
 function is_https() {
@@ -163,11 +156,9 @@ function url_base() {
 }
 
 function send_cookie($name, $value, $permanent, $ops=false) {
-    global $master_url;
-
     // the following allows independent login for projects on the same server
     //
-    $url = parse_url($master_url);
+    $url = parse_url(master_url());
     $path = $url['path'];
     if ($ops) {
         $path = substr($path, 0, -1);
@@ -177,13 +168,12 @@ function send_cookie($name, $value, $permanent, $ops=false) {
     setcookie($name, $value, $expire, $path,
         '',
         is_https(),     // if this page is secure, make cookie secure
-        true            // httponly; no JS access
+        true            // use cookie for HTTP only; no JS access
     );
 }
 
 function clear_cookie($name, $ops=false) {
-    global $master_url;
-    $url = parse_url($master_url);
+    $url = parse_url(master_url());
     $path = $url['path'];
     if ($ops) {
         $path = substr($path, 0, -1);
@@ -304,7 +294,7 @@ function page_head(
         <html lang="en">
         <head>
     ';
-    echo '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>';
+    echo sprintf('<script src="%s"></script>', JQUERY_URL);
 
     if (defined('GLOBAL_HEAD_EXTRA')) {
         echo GLOBAL_HEAD_EXTRA;
@@ -425,52 +415,6 @@ function error_page($msg) {
     echo $msg;
     page_tail();
     exit();
-}
-
-// convert time interval in seconds to a string of the form
-// 'D days h hours m min s sec'.
-
-function time_diff($x, $res=3) {
-    $x = (int)$x;
-    $days    = (int)($x/86400);
-    $hours   = (int)(($x-$days*86400)/3600);
-    $minutes = (int)(($x-$days*86400-$hours*3600)/60);
-    $seconds = $x % 60;
-
-    $s = "";
-    if ($days) {
-        $s .= "$days ".tra("days")." ";
-    }
-    if ($res>0 && ($hours || strlen($s))) {
-        $s .= "$hours ".tra("hours")." ";
-    }
-    if ($res>1 && ($minutes || strlen($s))) {
-        $s .= "$minutes ".tra("min")." ";
-    }
-    if ($res>2) {
-        $s .= "$seconds ".tra("sec")." ";
-    }
-    return $s;
-}
-
-
-function date_str($x) {
-    if ($x == 0) return "---";
-    return gmdate('j M Y', (int)$x);
-}
-
-function time_str($x) {
-    if ($x == 0) return "---";
-    return gmdate('j M Y, G:i:s', (int)$x) . " UTC";
-}
-
-function local_time_str($x) {
-    if ($x == 0) return "---";
-    return date('j M Y, H:i T', (int)$x);
-}
-
-function pretty_time_str($x) {
-    return time_str($x);
 }
 
 function start_table_str($class="", $style="") {
@@ -923,11 +867,11 @@ function button_style($color='green', $font_size=null) {
     if ($font_size) {
         $fs = sprintf('; font-size:%dpx', $font_size);
     }
-    $c = 'seagreen';
-    if ($color == 'blue') $c = 'steelblue';
+    if ($color == 'green') $color = 'seagreen';
+    if ($color == 'blue') $color = 'steelblue';
     return sprintf(
         'style="background-color:%s; color:white; text-decoration:none%s"',
-        $c, $fs
+        $color, $fs
     );
 }
 // Show a link formatted to look like a button.
@@ -1098,17 +1042,20 @@ function credit_to_gflop_hours($c) {
     return $c/(200/24);
 }
 
-function do_download($path) {
-    $name=basename($path);
+function download_header($name, $nbytes) {
     header('Content-Description: File Transfer');
     header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename='.$name);
+    header("Content-Disposition: attachment; filename=$name");
     header('Content-Transfer-Encoding: binary');
     header('Expires: 0');
     header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
     header('Pragma: public');
-    header('Content-Length: ' . filesize($path));
+    header("Content-Length: $nbytes");
     flush();
+}
+
+function do_download($path) {
+    download_header(basename($path), filesize($path));
     readfile($path);
 }
 

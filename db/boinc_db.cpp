@@ -542,6 +542,7 @@ void DB_HOST::db_print(char* buf){
     ESCAPE(os_name);
     ESCAPE(os_version);
     ESCAPE(product_name);
+    ESCAPE(misc);
     sprintf(buf,
         "create_time=%d, userid=%lu, "
         "rpc_seqno=%d, rpc_time=%d, "
@@ -565,7 +566,8 @@ void DB_HOST::db_print(char* buf){
         "error_rate=%.15e, "
         "product_name='%s', "
         "gpu_active_frac=%.15e, "
-        "p_ngpus=%d, p_gpu_fpops=%.15e ",
+        "p_ngpus=%d, p_gpu_fpops=%.15e, "
+        "misc='%s' ",
         create_time, userid,
         rpc_seqno, rpc_time,
         total_credit, expavg_credit, expavg_time,
@@ -588,7 +590,8 @@ void DB_HOST::db_print(char* buf){
         _error_rate,
         product_name,
         gpu_active_frac,
-        p_ngpus, p_gpu_fpops
+        p_ngpus, p_gpu_fpops,
+        misc
     );
     UNESCAPE(domain_name);
     UNESCAPE(serialnum);
@@ -599,6 +602,7 @@ void DB_HOST::db_print(char* buf){
     UNESCAPE(os_version);
     UNESCAPE(host_cpid);
     UNESCAPE(product_name);
+    UNESCAPE(misc);
 }
 
 void DB_HOST::db_parse(MYSQL_ROW &r) {
@@ -650,6 +654,9 @@ void DB_HOST::db_parse(MYSQL_ROW &r) {
     _error_rate = atof(r[i++]);
     strcpy2(product_name, r[i++]);
     gpu_active_frac = atof(r[i++]);
+    p_ngpus = atoi(r[i++]);
+    p_gpu_fpops = atof(r[i++]);
+    strcpy2(misc, r[i++]);
 }
 
 int DB_HOST::update_diff_validator(HOST& h) {
@@ -881,6 +888,12 @@ int DB_HOST::update_diff_sched(HOST& h) {
     }
     if (p_gpu_fpops != h.p_gpu_fpops) {
         sprintf(buf, " p_gpu_fpops=%.15e,", p_gpu_fpops);
+        strcat(updates, buf);
+    }
+    if (strcmp(misc, h.misc)) {
+        escape_string(misc, sizeof(misc));
+        sprintf(buf, " misc='%s',", misc);
+        unescape_string(misc, sizeof(misc));
         strcat(updates, buf);
     }
 
@@ -1589,6 +1602,7 @@ void DB_STATE_COUNTS::db_parse(MYSQL_ROW& r) {
     workunit_file_delete_state_2 = atoi(r[i++]);
 }
 
+// must match the query in next function
 void TRANSITIONER_ITEM::parse(MYSQL_ROW& r) {
     int i=0;
     clear();
@@ -2050,6 +2064,8 @@ int DB_VALIDATOR_ITEM_SET::update_workunit(WORKUNIT& wu) {
     return retval;
 }
 
+// must correspond to queries in enumeration functions below
+//
 void WORK_ITEM::parse(MYSQL_ROW& r) {
     int i=0;
     memset(this, 0, sizeof(WORK_ITEM));
@@ -2100,9 +2116,9 @@ int DB_WORK_ITEM::enumerate(
     char query[MAX_QUERY_LEN];
     int retval;
     MYSQL_ROW row;
+
     if (!cursor.active) {
         // use "r1" to refer to the result, since the feeder assumes that
-        // (historical reasons)
         //
         sprintf(query,
             "select high_priority r1.id, r1.priority, r1.server_state, r1.report_deadline, workunit.* from result r1 force index(ind_res_st), workunit, app "
@@ -2119,10 +2135,15 @@ int DB_WORK_ITEM::enumerate(
             order_clause,
             limit
         );
+        //fprintf(stderr, "query: %s\n", query);
         retval = db->do_query(query);
-        if (retval) return mysql_errno(db->mysql);
+        if (retval) {
+            return mysql_errno(db->mysql);
+        }
         cursor.rp = mysql_store_result(db->mysql);
-        if (!cursor.rp) return mysql_errno(db->mysql);
+        if (!cursor.rp) {
+            return mysql_errno(db->mysql);
+        }
         cursor.active = true;
     }
     row = mysql_fetch_row(cursor.rp);
@@ -2130,14 +2151,17 @@ int DB_WORK_ITEM::enumerate(
         mysql_free_result(cursor.rp);
         cursor.active = false;
         retval = mysql_errno(db->mysql);
-        if (retval) return ERR_DB_CONN_LOST;
+        if (retval) {
+            return ERR_DB_CONN_LOST;
+        }
         return ERR_DB_NOT_FOUND;
-    } else {
-        parse(row);
     }
+    parse(row);
     return 0;
 }
 
+// cycles through all results
+//
 int DB_WORK_ITEM::enumerate_all(
     int limit, const char* select_clause
 ) {
@@ -2146,7 +2170,6 @@ int DB_WORK_ITEM::enumerate_all(
     MYSQL_ROW row;
     if (!cursor.active) {
         // use "r1" to refer to the result, since the feeder assumes that
-        // (historical reasons)
         //
         sprintf(query,
             "select high_priority r1.id, r1.priority, r1.server_state, r1.report_deadline, workunit.* from result r1 force index(ind_res_st), workunit force index(primary), app"
@@ -2161,9 +2184,13 @@ int DB_WORK_ITEM::enumerate_all(
             limit
         );
         retval = db->do_query(query);
-        if (retval) return mysql_errno(db->mysql);
+        if (retval) {
+            return mysql_errno(db->mysql);
+        }
         cursor.rp = mysql_store_result(db->mysql);
-        if (!cursor.rp) return mysql_errno(db->mysql);
+        if (!cursor.rp) {
+            return mysql_errno(db->mysql);
+        }
 
         // if query gets no rows, start over in ID space
         //
@@ -2179,12 +2206,62 @@ int DB_WORK_ITEM::enumerate_all(
         mysql_free_result(cursor.rp);
         cursor.active = false;
         retval = mysql_errno(db->mysql);
-        if (retval) return ERR_DB_CONN_LOST;
+        if (retval) {
+            return ERR_DB_CONN_LOST;
+        }
         return ERR_DB_NOT_FOUND;
-    } else {
-        parse(row);
-        start_id = res_id;
     }
+    parse(row);
+    start_id = res_id;
+    return 0;
+}
+
+// enumerate jobs submitted by the given user
+//
+int DB_WORK_ITEM::user_query(int limit, DB_ID_TYPE user_id) {
+    char query[MAX_QUERY_LEN];
+    int retval;
+
+    if (cursor.rp) {
+        mysql_free_result(cursor.rp);
+        cursor.rp = NULL;
+        cursor.active = false;
+    }
+    sprintf(query,
+        "select r1.id, r1.priority, r1.server_state, r1.report_deadline, workunit.* from result r1, workunit, batch "
+        " where r1.server_state=%d "
+        " and r1.workunitid=workunit.id "
+        " and workunit.transitioner_flags=0 "
+        " and workunit.batch = batch.id "
+        " and batch.user_id = %lu "
+        " order by r1.priority desc, workunit.id "
+        " limit %d",
+        RESULT_SERVER_STATE_UNSENT,
+        user_id,
+        limit
+    );
+    //fprintf(stderr, "query: %s\n", query);
+    retval = db->do_query(query);
+    if (retval) {
+        return mysql_errno(db->mysql);
+    }
+    cursor.rp = mysql_store_result(db->mysql);
+    if (!cursor.rp) {
+        return mysql_errno(db->mysql);
+    }
+    return 0;
+}
+
+int DB_WORK_ITEM::user_num_rows() {
+    return mysql_num_rows(cursor.rp);
+}
+
+int DB_WORK_ITEM::user_fetch_row() {
+    MYSQL_ROW row = mysql_fetch_row(cursor.rp);
+    if (!row) {
+        return ERR_DB_NOT_FOUND;
+    }
+    parse(row);
     return 0;
 }
 
@@ -2257,14 +2334,6 @@ void SCHED_RESULT_ITEM::parse(MYSQL_ROW& r) {
     app_version_id = atol(r[i++]);
 }
 
-int DB_SCHED_RESULT_ITEM_SET::add_result(char* result_name) {
-    SCHED_RESULT_ITEM result;
-    result.id = 0;
-    strcpy2(result.queried_name, result_name);
-    results.push_back(result);
-    return 0;
-}
-
 int DB_SCHED_RESULT_ITEM_SET::enumerate() {
     string query;
     int retval;
@@ -2272,7 +2341,6 @@ int DB_SCHED_RESULT_ITEM_SET::enumerate() {
     MYSQL_RES* rp;
     MYSQL_ROW row;
     SCHED_RESULT_ITEM ri;
-
 
     query =
         "SELECT "
@@ -2329,7 +2397,15 @@ int DB_SCHED_RESULT_ITEM_SET::enumerate() {
     return 0;
 }
 
-int DB_SCHED_RESULT_ITEM_SET::lookup_result(char* result_name, SCHED_RESULT_ITEM** rip) {
+int DB_SCHED_RESULT_ITEM_SET::add_result(const char* result_name) {
+    SCHED_RESULT_ITEM result;
+    result.id = 0;
+    strcpy2(result.queried_name, result_name);
+    results.push_back(result);
+    return 0;
+}
+
+int DB_SCHED_RESULT_ITEM_SET::lookup_result(const char* result_name, SCHED_RESULT_ITEM** rip) {
     unsigned int i;
     for (i=0; i<results.size(); i++) {
         if (!strcmp(results[i].name, result_name)) {

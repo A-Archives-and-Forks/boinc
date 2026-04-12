@@ -81,19 +81,22 @@ double CLIENT_STATE::allowed_disk_usage(double boinc_total) {
 int CLIENT_STATE::get_disk_usages() {
     unsigned int i;
     double size;
-    PROJECT* p;
     int retval;
     char buf[MAXPATHLEN];
 
     client_disk_usage = 0;
     total_disk_usage = 0;
-    for (i=0; i<projects.size(); i++) {
-        p = projects[i];
+
+    // disk usage in project directories
+    //
+    for (PROJECT *p: projects) {
         p->disk_usage = 0;
         retval = dir_size_alloc(p->project_dir(), size);
         if (!retval) p->disk_usage = size;
     }
 
+    // disk usage in slot directories
+    //
     for (i=0; i<active_tasks.active_tasks.size(); i++) {
         ACTIVE_TASK* atp = active_tasks.active_tasks[i];
         get_slot_dir(atp->slot, buf, sizeof(buf));
@@ -101,15 +104,32 @@ int CLIENT_STATE::get_disk_usages() {
         if (retval) continue;
         atp->wup->project->disk_usage += size;
     }
-    for (i=0; i<projects.size(); i++) {
-        p = projects[i];
+    for (PROJECT *p: projects) {
         total_disk_usage += p->disk_usage;
     }
+
+    // disk usage top level of BOINC data dir: XML and log files
+    //
     retval = dir_size_alloc(".", size, false);
     if (!retval) {
         client_disk_usage = size;
         total_disk_usage += size;
     }
+
+#ifdef _WIN64
+    // Win: if using boinc-buda-runner WSL distro,
+    // include its disk image size
+    //
+    WSL_DISTRO *wd = host_info.wsl_distros.find_docker();
+    if (wd) {
+        retval = dir_size_alloc(wd->base_path.c_str(), size);
+        if (!retval) {
+            client_disk_usage += size;
+            total_disk_usage += size;
+        }
+    }
+#endif
+
     return 0;
 }
 
@@ -130,15 +150,11 @@ int CLIENT_STATE::get_disk_usages() {
 //   + X*drs/(total drs of greedy projects)
 //
 void CLIENT_STATE::get_disk_shares() {
-    PROJECT* p;
-    unsigned int i;
-
     // compute disk resource shares
     //
     double trs = 0;
     double max_rs = 0;
-    for (i=0; i<projects.size(); i++) {
-        p = projects[i];
+    for (PROJECT *p: projects) {
         p->ddu = std::max(p->disk_usage, p->desired_disk_usage);
         double rs = p->resource_share;
         trs += rs;
@@ -146,13 +162,11 @@ void CLIENT_STATE::get_disk_shares() {
     }
     if (trs) {
         max_rs /= 10;
-        for (i=0; i<projects.size(); i++) {
-            p = projects[i];
+        for (PROJECT *p: projects) {
             p->disk_resource_share = p->resource_share + max_rs;
         }
     } else {
-        for (i=0; i<projects.size(); i++) {
-            p = projects[i];
+        for (PROJECT *p: projects) {
             p->disk_resource_share = 1;
         }
     }
@@ -164,8 +178,7 @@ void CLIENT_STATE::get_disk_shares() {
     double greedy_drs = 0;
     double non_greedy_ddu = 0;
     double allowed = allowed_disk_usage(total_disk_usage);
-    for (i=0; i<projects.size(); i++) {
-        p = projects[i];
+    for (PROJECT *p: projects) {
         p->disk_quota = allowed*p->disk_resource_share/trs;
         if (p->ddu > p->disk_quota) {
             greedy_drs += p->disk_resource_share;
@@ -181,8 +194,7 @@ void CLIENT_STATE::get_disk_shares() {
             allowed/GIGA, total_disk_usage/GIGA
         );
     }
-    for (i=0; i<projects.size(); i++) {
-        p = projects[i];
+    for (PROJECT *p: projects) {
         double rs = p->disk_resource_share/trs;
         if (p->ddu > allowed*rs) {
             p->disk_share = greedy_allowed*p->disk_resource_share/greedy_drs;
@@ -229,12 +241,9 @@ int CLIENT_STATE::check_suspend_processing() {
         ) {
             return SUSPEND_REASON_BATTERIES;
         }
-#ifndef ANDROID
-        // perform this check after SUSPEND_REASON_BATTERY_CHARGING on Android
         if (!global_prefs.run_if_user_active && user_active) {
             return SUSPEND_REASON_USER_ACTIVE;
         }
-#endif
         if (global_prefs.cpu_times.suspended(now)) {
             return SUSPEND_REASON_TIME_OF_DAY;
         }
@@ -265,55 +274,50 @@ int CLIENT_STATE::check_suspend_processing() {
     }
 
 #ifdef ANDROID
-    // suspend if we haven't heard from the GUI in 30 sec
-    // (we rely on it for battery info)
-    //
-    if (now > device_status_time + ANDROID_KEEPALIVE_TIMEOUT) {
-        requested_exit = true;
-        return SUSPEND_REASON_NO_GUI_KEEPALIVE;
-    }
+    // Battery checks.
+    // Do these only if we've received an RPC from the GUI
+    // (which is where we get battery info)
 
-    // check for hot battery
-    // If suspend because of hot battery, don't resume for at least 5 min
-    // (crude hysteresis)
-    //
-    static double battery_heat_resume_time=0;
-    if (now < battery_heat_resume_time) {
-        return SUSPEND_REASON_BATTERY_OVERHEATED;
-    }
-    if (device_status.battery_state == BATTERY_STATE_OVERHEATED) {
-        battery_heat_resume_time = now + ANDROID_BATTERY_BACKOFF;
-        return SUSPEND_REASON_BATTERY_OVERHEATED;
-    }
-    if (device_status.battery_temperature_celsius > global_prefs.battery_max_temperature) {
-        battery_heat_resume_time = now + ANDROID_BATTERY_BACKOFF;
-        return SUSPEND_REASON_BATTERY_OVERHEATED;
-    }
+    if (device_status_time) {
+        // exit if we haven't heard from the GUI in 30 sec
+        // (we rely on it for battery info)
+        //
+        if (now > device_status_time + ANDROID_KEEPALIVE_TIMEOUT) {
+            msg_printf(NULL, MSG_INTERNAL_ERROR,
+                "No RPC from GUI in last %d sec - exiting",
+                ANDROID_KEEPALIVE_TIMEOUT
+            );
+            requested_exit = true;
+            return SUSPEND_REASON_NO_GUI_KEEPALIVE;
+        }
 
-    // on some devices, running jobs can drain the battery even
-    // while it's recharging.
-    // So compute only if 95% charged or more.
-    //
-    static double battery_charge_resume_time=0;
-    if (now < battery_charge_resume_time) {
-        return SUSPEND_REASON_BATTERY_CHARGING;
-    }
-    int cp = device_status.battery_charge_pct;
-    if (cp >= 0) {
-        if (cp < global_prefs.battery_charge_min_pct) {
+        // check for hot battery
+        // If suspend because of hot battery, don't resume for at least 5 min
+        // (crude hysteresis)
+        //
+        if (device_status.battery_state == BATTERY_STATE_OVERHEATED) {
+            battery_heat_resume_time = now + ANDROID_BATTERY_BACKOFF;
+            return SUSPEND_REASON_BATTERY_OVERHEATED;
+        }
+        if (device_status.battery_temperature_celsius > global_prefs.battery_max_temperature) {
+            battery_heat_resume_time = now + ANDROID_BATTERY_BACKOFF;
+            return SUSPEND_REASON_BATTERY_OVERHEATED;
+        }
+        if (now < battery_heat_resume_time) {
+            return SUSPEND_REASON_BATTERY_HEAT_WAIT;
+        }
+
+        // check for sufficient battery charge.
+        // If suspend, don't resume for at least 5 min
+        //
+        int cp = device_status.battery_charge_pct;
+        if ((cp >= 0) && (cp < global_prefs.battery_charge_min_pct)) {
             battery_charge_resume_time = now + ANDROID_BATTERY_BACKOFF;
             return SUSPEND_REASON_BATTERY_CHARGING;
         }
-    }
-
-    // user active.
-    // Do this check after checks that user can not influence on Android.
-    // E.g.
-    // 1. "connect to charger to continue computing"
-    // 2. "charge battery until 90%"
-    // 3. "turn screen off to continue computing"
-    if (!global_prefs.run_if_user_active && user_active) {
-        return SUSPEND_REASON_USER_ACTIVE;
+        if (now < battery_charge_resume_time) {
+            return SUSPEND_REASON_BATTERY_CHARGE_WAIT;
+        }
     }
 #endif
 
@@ -365,6 +369,7 @@ void CLIENT_STATE::show_suspend_tasks_message(int reason) {
                 suspend_reason_string(reason)
             );
         }
+#ifdef ANDROID
         switch (reason) {
         case SUSPEND_REASON_BATTERY_OVERHEATED:
             if (log_flags.task) {
@@ -378,13 +383,30 @@ void CLIENT_STATE::show_suspend_tasks_message(int reason) {
         case SUSPEND_REASON_BATTERY_CHARGING:
             if (log_flags.task) {
                 msg_printf(NULL, MSG_INFO,
-                    "(battery charge level %.1f%% < threshold %.1f%%",
+                    "(battery charge level %.1f%% < threshold %.1f%%)",
                     device_status.battery_charge_pct,
                     global_prefs.battery_charge_min_pct
                 );
             }
             break;
+        case SUSPEND_REASON_BATTERY_CHARGE_WAIT:
+            if (log_flags.task) {
+                msg_printf(NULL, MSG_INFO,
+                    "(battery charge wait: %.0f sec)",
+                    battery_charge_resume_time - now
+                );
+            }
+            break;
+        case SUSPEND_REASON_BATTERY_HEAT_WAIT:
+            if (log_flags.task) {
+                msg_printf(NULL, MSG_INFO,
+                    "(battery heat wait: %.0f sec)",
+                    battery_heat_resume_time - now
+                );
+            }
+            break;
         }
+#endif
     }
 }
 
@@ -392,9 +414,6 @@ int CLIENT_STATE::resume_tasks(int reason) {
     if (reason == SUSPEND_REASON_CPU_THROTTLE) {
         active_tasks.unsuspend_all(SUSPEND_REASON_CPU_THROTTLE);
     } else {
-        if (log_flags.task) {
-            msg_printf(NULL, MSG_INFO, "Resuming computation");
-        }
         active_tasks.unsuspend_all();
         request_schedule_cpus("Resuming computation");
     }

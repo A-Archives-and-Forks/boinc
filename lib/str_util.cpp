@@ -183,8 +183,8 @@ int ndays_to_string (double x, int smallest_timescale, char *buf) {
 // convert seconds into a string "0h00m00s00"
 //
 void secs_to_hmsf(double secs, char* buf) {
-    int s = secs;
-    int f = (secs - s) * 100.0;
+    int s = (int)secs;
+    int f = (int)((secs - s) * 100.0);
     int h = s / 3600;
     s -= h * 3600;
     int m = s / 60;
@@ -404,34 +404,40 @@ void collapse_whitespace(char *str) {
     strcpy(str, s.c_str());
 }
 
-char* time_to_string(double t) {
+char* time_to_string(double t, bool utc) {
     static char buf[100];
     if (!t) {
         safe_strcpy(buf, "---");
     } else {
         time_t x = (time_t)t;
-        struct tm* tm = localtime(&x);
+        struct tm* tm = utc ? gmtime(&x) : localtime(&x);
         strftime(buf, sizeof(buf)-1, "%d-%b-%Y %H:%M:%S", tm);
+        if (utc) {
+            safe_strcat(buf, " UTC");
+        }
     }
     return buf;
 }
 
-char* precision_time_to_string(double t) {
+char* precision_time_to_string(double t, bool utc) {
     static char buf[100];
     char finer[16];
-    int hundreds_of_microseconds=(int)(10000*(t-(int)t));
+    int hundreds_of_microseconds = (int)(10000*(t - (int)t));
     if (hundreds_of_microseconds == 10000) {
         // paranoia -- this should never happen!
         //
-        hundreds_of_microseconds=0;
-        t+=1.0;
+        hundreds_of_microseconds = 0;
+        t += 1.0;
     }
     time_t x = (time_t)t;
-    struct tm* tm = localtime(&x);
+    struct tm* tm = utc ? gmtime(&x) : localtime(&x);
 
     strftime(buf, sizeof(buf)-1, "%Y-%m-%d %H:%M:%S", tm);
     snprintf(finer, sizeof(finer), ".%04d", hundreds_of_microseconds);
     safe_strcat(buf, finer);
+    if (utc) {
+        safe_strcat(buf, " UTC");
+    }
     return buf;
 }
 
@@ -618,6 +624,7 @@ const char* boincerror(int which_error) {
         case ERR_STAT : return "stat() failed";
         case ERR_FCLOSE : return "fclose() failed";
         case ERR_INVALID_STATE: return "invalid state";
+        case ERR_MMAP: return "mmap() failed";
         case HTTP_STATUS_NOT_FOUND: return "HTTP file not found";
         case HTTP_STATUS_PROXY_AUTH_REQ: return "HTTP proxy authentication failure";
         case HTTP_STATUS_RANGE_REQUEST_ERROR: return "HTTP range request error";
@@ -675,6 +682,9 @@ const char* suspend_reason_string(int reason) {
     case SUSPEND_REASON_BATTERY_CHARGING: return "battery low";
     case SUSPEND_REASON_BATTERY_OVERHEATED: return "battery thermal protection";
     case SUSPEND_REASON_NO_GUI_KEEPALIVE: return "GUI not active";
+    case SUSPEND_REASON_PODMAN_INIT: return "Podman initializing";
+    case SUSPEND_REASON_BATTERY_CHARGE_WAIT: return "battery charge wait";
+    case SUSPEND_REASON_BATTERY_HEAT_WAIT: return "battery heat wait";
     }
     return "unknown reason";
 }
@@ -809,35 +819,14 @@ char* lf_terminate(char* p) {
     return p;
 }
 
-void parse_serialnum(char* in, char* boinc, char* vbox, char* coprocs) {
-    strcpy(boinc, "");
-    strcpy(vbox, "");
-    strcpy(coprocs, "");
-    while (*in) {
-        if (*in != '[') break;      // format error
-        char* p = strchr(in, ']');
-        if (!p) break;              // format error
-        p++;
-        char c = *p;
-        *p = 0;
-        if (strstr(in, "BOINC")) {
-            strcpy(boinc, in);
-        } else if (strstr(in, "vbox")) {
-            strcpy(vbox, in);
-        } else {
-            strcat(coprocs, in);
-        }
-        *p = c;
-        in = p;
-    }
-}
-
+// split a string with the given delimiter (e.g. \n).
+//
 vector<string> split(string s, char delim) {
     vector<string> result;
     stringstream ss(s);
     string item;
     while (getline(ss, item, delim)) {
-        result.push_back(item);
+        result.push_back(item+delim);
     }
     return result;
 }
