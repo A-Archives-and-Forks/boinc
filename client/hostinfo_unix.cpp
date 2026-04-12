@@ -2370,7 +2370,7 @@ long HOST_INFO::user_idle_time(bool check_all_logins) {
     if (show_idle_time_legacy_warning) {
         msg_printf(NULL, MSG_INFO,
             "Currently BOINC uses legacy idle detection methods that might not \
-work properly on all systems. Please consider installing modern idle detection \
+work properly on all systems. Please consider installing a modern idle detection \
 utility that works on Wayland and X11: \
 https://github.com/jamescowens/idle_detect");
         show_idle_time_legacy_warning = false;
