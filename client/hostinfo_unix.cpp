@@ -2312,7 +2312,7 @@ bool get_idle_time_from_daemon(long &idle_time) {
             close(fd);
             return false;
         }
-        if (st.st_size < 2*sizeof(int64_t)) {
+        if ((size_t)st.st_size < 2*sizeof(int64_t)) {
             close(fd);
             return false;
         }
