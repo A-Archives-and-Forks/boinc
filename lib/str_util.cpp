@@ -196,9 +196,9 @@ void secs_to_hmsf(double secs, char* buf) {
 //
 string flops_to_string(double flops) {
     char buf[256];
-    if (flops > 1e12) {
+    if (flops >= 1e12) {
         snprintf(buf, 256, "%0.2f TFLOPS", flops/1e12);
-    } else if (flops > 1e9) {
+    } else if (flops >= 1e9) {
         snprintf(buf, 256, "%0.2f GFLOPS", flops/1e9);
     } else {
         snprintf(buf, 256, "%0.2f MFLOPS", flops/1e6);
