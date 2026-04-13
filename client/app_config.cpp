@@ -110,21 +110,24 @@ int APP_CONFIGS::config_app_versions(PROJECT* p, bool show_warnings) {
             // for BUDA, modify the resource usage
             // of WUs that use this app version
             //
+            // WU doesn't directly link to app version;
+            // see if there's a result that links to both
+            //
             for (WORKUNIT *wup: gstate.workunits) {
-                if (!wup->has_resource_usage) continue;
-                if (wup->project != p) continue;
-                if (wup->app != app) continue;
-
-                // WU doesn't directly link to app version;
-                // see if there's a result that links to both
-                //
-                for (RESULT *rp: gstate.results) {
-                    if (rp->avp == avp && rp->wup == wup) {
-                        modify_usage_avc(avc, wup->resource_usage);
-                        break;
-                    }
+                wup->ref_cnt = 0;
+            }
+            for (RESULT *rp: gstate.results) {
+                if (rp->avp == avp) {
+                    rp->wup->ref_cnt = 1;
                 }
             }
+            for (WORKUNIT *wup: gstate.workunits) {
+                if (!wup->has_resource_usage) continue;
+                if (wup->ref_cnt == 0) continue;
+                modify_usage_avc(avc, wup->resource_usage);
+            }
+            // don't break here; it's possible that multiple app versions
+            // have the same app and plan class
         }
         if (!found) {
             msg_printf(p, MSG_USER_ALERT,
