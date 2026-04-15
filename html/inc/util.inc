@@ -240,8 +240,8 @@ $is_login_page = false;
 // then calls project_banner() (in html/project/project.inc)
 // to output whatever you want at the top of your web pages.
 //
-// Page_head() is overridable so that projects that want to integrate BOINC
-// with an existing web framework can more easily do so.
+// page_head() is overridable so that you can integrate BOINC
+// with an existing web framework.
 // To do so, define page_head() in html/project/project.inc
 //
 if (!function_exists("page_head")){
@@ -257,7 +257,7 @@ function page_head(
         // if set, include schedulers.txt.
         // also pass to project_banner() in case you want a different
         // header for your main page.
-    $url_prefix="",
+    $url_prefix='',
         // prepend this to links.
         // Use for web pages not in the top directory
     $head_extra=null
