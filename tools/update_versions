@@ -40,13 +40,21 @@ $confirm = true;
 $verbose = false;
 
 $c = simplexml_load_file("config.xml");
-if (!$c) die("config.xml not found.  Run this in project root dir.\n");
-$download_url = $c->config->download_url;
-if (!$download_url) die("<download_url> not found in config.xml\n");
-$download_dir = $c->config->download_dir;
-if (!$download_dir) die("<download_dir> not found in config.xml\n");
-$key_dir = $c->config->key_dir;
-if (!$key_dir) die("<key_dir> not found in config.xml\n");
+if (!$c) {
+    die("config.xml not found.  Run this in project root dir.\n");
+}
+$download_url = (string)$c->config->download_url;
+if (!$download_url) {
+    die("<download_url> not found in config.xml\n");
+}
+$download_dir = (string)$c->config->download_dir;
+if (!$download_dir) {
+    die("<download_dir> not found in config.xml\n");
+}
+$key_dir = (string)$c->config->key_dir;
+if (!$key_dir) {
+    die("<key_dir> not found in config.xml\n");
+}
 
 function lookup_app($name) {
     global $apps;
