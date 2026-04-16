@@ -279,7 +279,15 @@ function project_specific_prefs_parse($prefs_xml) {
         $prefs->max_gfx_cpu_pct = (string)$p->max_gfx_cpu_pct;
     }
     if (APP_SELECT_PREFS) {
-        foreach ($p->apps_selected->app_id as $item) {
+        $prefs->app_ids = [];
+        // in older code, <app_id>s weren't enclosed in <app_selected>
+        //
+        if (empty($p->apps_selected)) {
+            $app_id_nodes = $p->app_id;
+        } else {
+            $app_id_nodes = $p->apps_selected->app_id;
+        }
+        foreach ($app_id_nodes as $item) {
             $prefs->app_ids[] = (int)$item;
         }
         $prefs->allow_non_preferred_apps = (int)$p->allow_non_preferred_apps;
