@@ -76,7 +76,7 @@ function create_account(
         return array(null, -1, "HTTP error to $url");
     }
 
-    $r = simplexml_load_string($reply);
+    $r = @simplexml_load_string($reply);
     if (!$r) {
         return array(null, -1, "Can't parse reply XML:\n$reply");
     }
