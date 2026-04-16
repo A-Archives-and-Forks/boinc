@@ -213,10 +213,10 @@ function handle_team($f) {
     if ($team) {
         if (!$user) {
             echo "   team exists (and has an owner) but user $t->user_email doesn't\n";
-            //return;
+            return;
         } else if ($user->id != $team->userid) {
             echo "   team exists but is owned by a different user\n";
-            //return;
+            return;
         }
         if ($team->seti_id) {
             if ($team->seti_id == $t->id) {
