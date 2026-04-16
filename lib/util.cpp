@@ -710,9 +710,7 @@ string parse_ldd_libc(const char* input) {
 // On Win this requires connecting to a shell in the WSL distro
 //
 #ifdef _WIN32
-int DOCKER_CONN::init(
-    WSL_DISTRO &wd, bool _verbose
-) {
+int DOCKER_CONN::init(WSL_DISTRO &wd) {
     string err_msg;
     type = wd.docker_type;
     cli_prog = docker_cli_prog(wd.docker_type);
@@ -730,14 +728,12 @@ int DOCKER_CONN::init(
         );
         return -1;
     }
-    verbose = _verbose;
     return 0;
 }
 #else
-int DOCKER_CONN::init(DOCKER_TYPE docker_type, bool _verbose) {
+int DOCKER_CONN::init(DOCKER_TYPE docker_type) {
     type = docker_type;
     cli_prog = docker_cli_prog(docker_type);
-    verbose = _verbose;
     return 0;
 }
 #endif
@@ -745,7 +741,9 @@ int DOCKER_CONN::init(DOCKER_TYPE docker_type, bool _verbose) {
 // issue a Docker command and return its output (stdout + stderr)
 // as a vector of lines (\n-terminated)
 //
-int DOCKER_CONN::command(const char* cmd, vector<string> &out) {
+int DOCKER_CONN::command(
+    const char* cmd, vector<string> &out, bool verbose
+) {
     char buf[1024];
     int retval;
     if (verbose) {
@@ -775,9 +773,7 @@ int DOCKER_CONN::command(const char* cmd, vector<string> &out) {
     );
     retval = run_command(buf, out);
     if (retval) {
-        if (verbose) {
-            fprintf(stderr, "command failed: %s\n", boincerror(retval));
-        }
+        fprintf(stderr, "command failed: %s\n", boincerror(retval));
         return retval;
     }
 #endif  // _WIN32
