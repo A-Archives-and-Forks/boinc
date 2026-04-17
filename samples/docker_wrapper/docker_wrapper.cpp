@@ -769,7 +769,7 @@ JOB_STATUS poll_app() {
 void print_once(string msg) {
     static vector<string> msgs;
     if (std::find(msgs.begin(), msgs.end(), msg) == msgs.end()) {
-        printf("%s", msg.c_str());
+        fprintf(stderr, "%s", msg.c_str());
         msgs.push_back(msg);
     }
 }
