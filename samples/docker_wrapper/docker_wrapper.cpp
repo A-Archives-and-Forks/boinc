@@ -766,7 +766,7 @@ JOB_STATUS poll_app() {
 
 // print the given message, but only once
 //
-void print_once(string msg) {
+void print_once(const string& msg) {
     static vector<string> msgs;
     if (std::find(msgs.begin(), msgs.end(), msg) == msgs.end()) {
         fprintf(stderr, "%s", msg.c_str());
