@@ -471,8 +471,6 @@ for ($i=1; $i<$argc; $i++) {
         $max_days = $argv[++$i];
     } else if ($argv[$i] == "--days") {     // deprecated
         $max_days = $argv[++$i];
-    } else {
-        echo "unrecognized arg: ".$argv[$i];
     }
 }
 
