@@ -247,7 +247,9 @@ $is_login_page = false;
 if (!function_exists("page_head")){
 function page_head(
     $title,
-        // page title. Put in <title>, used as title for browser tab.
+        // Page title; passed to project_banner()
+        // Also put in <title> (title for browser tab)
+        // unless browser_title is specified
     $body_attrs=null,
         // <body XXXX>
         // e.g. Javascript to put focus in an input field
@@ -259,11 +261,14 @@ function page_head(
         // header for your main page.
     $url_prefix='',
         // prepend this to links.
-        // Use for web pages not in the top directory
-    $head_extra=null
+        // Use for web pages not in the top directory.
+        // Passed to project_banner()
+    $head_extra=null,
         // extra stuff to put in <head>. E.g.:
         // reCAPTCHA code (create_profile.php)
         // bbcode javascript (forums)
+    $browser_title = null
+        // <title> contents
 ) {
     global $caching, $cache_control_extra, $did_page_head;
     global $is_login_page, $fixed_navbar;
@@ -309,7 +314,9 @@ function page_head(
         readfile("schedulers.txt");
     }
 
-    $t = $title?$title:PROJECT;
+    $t = $browser_title;
+    if (!$t) $t = $title;
+    if (!$t) $t = PROJECT;
     echo "<title>$t</title>\n";
     echo '
         <meta charset="utf-8">
@@ -592,11 +599,13 @@ function get_legal_filename($name) {
 }
 
 // Returns a string containing as many words
-// (being collections of characters separated by the character $delimiter)
-// as possible such that the total string length is <= $chars characters long.
-// If $ellipsis is true, then an ellipsis is added to any sentence which
-// is cut short.
-
+// (separated by $delimiter)
+// as possible such that the string length is <= $max_chars.
+// If $ellipsis is true, then add an ellipsis if we truncated.
+//
+// Don't use this if string can contain HTML tags;
+// we might remove the closing tag.
+//
 function sub_sentence($sentence, $delimiter, $max_chars, $ellipsis=false) {
     $words = explode($delimiter, $sentence);
     $total_chars = 0;
