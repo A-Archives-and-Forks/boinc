@@ -962,7 +962,7 @@ setGroupForUser:
     if (err)
         return err;
 
-    DoSudoPosixSpawn("/bin/mkdir", "0755", buf2, NULL, NULL, NULL, NULL);
+    DoSudoPosixSpawn("/bin/mkdir", "-m", "0755", buf2, NULL, NULL, NULL);
 
     // Fix the directory's permissions if created by an earlier version of BOINC.
     DoSudoPosixSpawn(chmodPath, "-f", "0755", buf2, NULL, NULL, NULL);
