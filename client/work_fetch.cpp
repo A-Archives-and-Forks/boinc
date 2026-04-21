@@ -250,6 +250,8 @@ static bool wacky_dcf(PROJECT* p) {
 // don't request anything if project is backed off.
 //
 void RSC_WORK_FETCH::set_request(PROJECT* p) {
+    req_instances = 0;
+    req_secs = 0;
 
     // if backup project, fetch 1 job per idle instance
     //
