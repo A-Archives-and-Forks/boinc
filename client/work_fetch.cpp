@@ -250,12 +250,23 @@ static bool wacky_dcf(PROJECT* p) {
 // don't request anything if project is backed off.
 //
 void RSC_WORK_FETCH::set_request(PROJECT* p) {
+    req_instances = 0;
+    req_secs = 0;
 
     // if backup project, fetch 1 job per idle instance
     //
     if (p->resource_share == 0) {
-        req_instances = nidle_now;
-        req_secs = 1;
+        if (nidle_now) {
+            // unless we're at the max concurrent limit
+            if (p->app_configs.project_has_mc
+                && p->app_configs.project_max_concurrent
+                && p->proj_n_concurrent >= p->app_configs.project_max_concurrent
+            ) {
+                return;
+            }
+            req_instances = 1;
+            req_secs = 1;
+        }
         return;
     }
     if (cc_config.fetch_minimal_work) {
