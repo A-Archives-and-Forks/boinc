@@ -84,6 +84,7 @@ using std::vector;
 using std::list;
 
 static double rec_sum;
+static int original_p_ncpus;
 
 // used in make_run_list() to keep track of resources used
 // by jobs tentatively scheduled so far
@@ -1286,6 +1287,33 @@ bool CLIENT_STATE::enforce_run_list(vector<RESULT*>& run_list) {
 
         ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
 
+        // Skip jobs if they would cause too many CPUs to be used.
+        //
+        // An MT could overcommit the CPUs by > 1.
+        // Options are:
+        // 1) run it anyway, and overcommit the CPUs
+        // 2) don't run it.
+        //      This can result in starvation.
+        // 3) don't run it if there are additional 1-CPU jobs.
+        //      The problem here is that we may never run the MT job
+        //      until it reaches deadline pressure.
+        // We'll go with 1) except if user has limited the #CPUs
+
+        // if user has limited the # of CPUs, don't use more than the limit
+        // (even if it means idle instances of CPU or GPU)
+        //
+        if (n_usable_cpus < original_p_ncpus
+            && ncpus_used + rp->resource_usage.avg_ncpus > n_usable_cpus
+        ) {
+            if (log_flags.cpu_sched_debug) {
+                msg_printf(rp->project, MSG_INFO,
+                    "[cpu_sched_debug] skipping %s: would exceed user-specified CPU limit",
+                    rp->name
+                );
+            }
+            continue;
+        }
+
         // if we're already using all the CPUs, don't allow additional CPU jobs;
         // allow coproc jobs if the resulting CPU load is at most ncpus+1
         //
@@ -1311,17 +1339,6 @@ bool CLIENT_STATE::enforce_run_list(vector<RESULT*>& run_list) {
                 continue;
             }
         }
-
-        // There's a possibility that this job is MT
-        // and would overcommit the CPUs by > 1.
-        // Options are:
-        // 1) run it anyway, and overcommit the CPUs
-        // 2) don't run it.
-        //      This can result in starvation.
-        // 3) don't run it if there are additional 1-CPU jobs.
-        //      The problem here is that we may never run the MT job
-        //      until it reaches deadline pressure.
-        // So we'll go with 1).
 
         // skip jobs whose 'expected working set size' (EWSS)
         // is too large to fit in available RAM.
@@ -1675,7 +1692,6 @@ void CLIENT_STATE::set_n_usable_cpus() {
     // config file can say to act like host has N CPUs
     //
     static bool first = true;
-    static int original_p_ncpus;
     if (first) {
         original_p_ncpus = host_info.p_ncpus;
         first = false;
