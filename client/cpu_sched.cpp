@@ -1297,7 +1297,7 @@ bool CLIENT_STATE::enforce_run_list(vector<RESULT*>& run_list) {
         // 3) don't run it if there are additional 1-CPU jobs.
         //      The problem here is that we may never run the MT job
         //      until it reaches deadline pressure.
-        // We'll go with 1) except if used has limited the #CPUs
+        // We'll go with 1) except if user has limited the #CPUs
 
         // if user has limited the # of CPUs, don't use more than the limit
         // (even if it means idle instances of CPU or GPU)
