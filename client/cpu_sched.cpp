@@ -23,17 +23,12 @@
 //          - for a given resource, jobs in deadline danger first
 //          - jobs from projects with lower recent est. credit first
 //      In principle, the run list could include all runnable jobs.
-//      For efficiency, we stop adding:
+//      But for efficiency, we stop adding:
 //          - GPU jobs: when all GPU instances used
-//          - CPU jobs: when the # of CPUs allocated to single-thread jobs,
-//              OR the # allocated to multi-thread jobs, exceeds # CPUs
-//              (ensure we have enough single-thread jobs
-//              in case we can't run the multi-thread jobs)
-//      NOTE: RAM usage is not taken into consideration
-//          in the process of building this list.
-//          It's possible that we include a bunch of jobs that can't run
-//          because of memory limits,
-//          even though there are other jobs that could run.
+//          - CPU jobs: when all CPUs used, with a 2X slop factor
+//              so we have enough jobs even if some can't run
+//              because of their RAM usage.
+//      (RAM usage is not taken into consideration in building this list)
 //      - add running jobs to the list
 //          (in case they haven't finished time slice or checkpointed)
 //      - sort the list according to "more_important()"
@@ -43,9 +38,7 @@
 //      other jobs (enforce_run_list).
 //      Don't run a job if
 //      - its GPUs can't be assigned (possible if need >1 GPU)
-//      - it's a multi-thread job, and CPU usage would be #CPUs+1 or more
-//      - it's a single-thread job, don't oversaturate CPU
-//          (details depend on whether a MT job is running)
+//      - it would use too many CPUs (see details below)
 //      - its memory usage would exceed RAM limits
 //          If there's a running job using a given app version,
 //          unstarted jobs using that app version
@@ -103,28 +96,42 @@ struct PROC_RESOURCES {
         pr_coprocs.clear_usage();
     }
 
-    // should we stop scanning jobs?
+    // In make_run_list(), should we stop scanning CPU jobs?
+    // factors:
+    // - we need to stop sometime; if there are 1000 jobs
+    //   it would be inefficient to scan them all
+    // - some jobs might use too much RAM to run,
+    //   so we scan jobs up to 2X #CPUs
     //
     inline bool stop_scan_cpu() {
-        if (ncpus_used_st >= ncpus) return true;
+        if (ncpus_used_st >= 2*ncpus) {
+            return true;
+        }
         if (ncpus_used_mt >= 2*ncpus) return true;
             // kind of arbitrary, but need to have some limit
             // in case there are only MT jobs, and lots of them
         return false;
     }
 
+    // similar, for GPU
+    //
     inline bool stop_scan_coproc(int rsc_type) {
         COPROC& cp = pr_coprocs.coprocs[rsc_type];
         for (int i=0; i<cp.count; i++) {
             if (cp.usage[i] < 1) return false;
+                // could make it 2 to provide more jobs
+                // for RAM exceeded case
         }
         return true;
     }
 
-    // Should we add this job to the runnable list?
-    // There are two possible reasons not to:
+    // Should we add this job to the run list?
+    // reasons not to:
     // - the job won't be able to run (e.g. it's being aborted)
-    // - the runnable list has enough jobs of this type already
+    // - it's backed off
+    // - it's GPU, and GPUs are suspended
+    // - it's Docker, and Docker not installed or not inited
+    // - it's GPU, and run list already commits the needed GPUs
     //
     bool can_schedule(RESULT* rp, ACTIVE_TASK* atp) {
         if (atp) {
@@ -156,20 +163,6 @@ struct PROC_RESOURCES {
         if (rp->uses_coprocs()) {
             if (!sufficient_coprocs(*rp)) {
                 return false;
-            }
-        } else {
-            // CPU jobs: see if we have enough already in list
-            //
-            if (rp->resource_usage.avg_ncpus > 1) {
-                if (ncpus_used_mt > 0) {
-                    if (ncpus_used_mt + rp->resource_usage.avg_ncpus > ncpus) {
-                        return false;
-                    }
-                }
-            } else {
-                if (ncpus_used_st >= ncpus) {
-                    return false;
-                }
             }
         }
 
@@ -252,6 +245,8 @@ struct PROC_RESOURCES {
         adjust_rec_sched(rp);
     }
 
+    // are there enough unused coproc instances to run this job?
+    //
     bool sufficient_coprocs(RESULT& r) {
         int rt = r.resource_usage.rsc_type;
         if (!rt) return true;
@@ -414,15 +409,6 @@ void CLIENT_STATE::assign_results_to_projects() {
         if (project->next_runnable_result) continue;
         project->next_runnable_result = rp;
     }
-
-    // mark selected results, so CPU scheduler won't try to consider
-    // a result more than once
-    //
-    for (PROJECT *project: projects) {
-        if (project->next_runnable_result) {
-            project->next_runnable_result->already_selected = true;
-        }
-    }
 }
 
 // Among projects with a "next runnable result",
@@ -434,17 +420,23 @@ RESULT* CLIENT_STATE::highest_prio_project_best_result() {
     double best_prio = 0;
     bool first = true;
 
+    msg_printf(0, MSG_INFO, "highest_prio_project_best_result()");
     for (PROJECT *p: projects) {
-        if (!p->next_runnable_result) continue;
+        if (!p->next_runnable_result) {
+            continue;
+        }
         if (first || p->sched_priority > best_prio) {
             first = false;
             best_project = p;
             best_prio = p->sched_priority;
         }
     }
-    if (!best_project) return NULL;
+    if (!best_project) {
+        return NULL;
+    }
 
     RESULT* rp = best_project->next_runnable_result;
+    rp->already_selected = true;
     best_project->next_runnable_result = 0;
     return rp;
 }
@@ -892,7 +884,7 @@ void CLIENT_STATE::make_run_list(vector<RESULT*>& run_list) {
     PROC_RESOURCES proc_rsc;
 
     if (log_flags.cpu_sched_debug) {
-        msg_printf(0, MSG_INFO, "[cpu_sched_debug] schedule_cpus(): start");
+        msg_printf(0, MSG_INFO, "[cpu_sched_debug] make_run_list(): start");
     }
 
     proc_rsc.init();
@@ -980,13 +972,14 @@ void CLIENT_STATE::make_run_list(vector<RESULT*>& run_list) {
 #endif
     while (!proc_rsc.stop_scan_cpu()) {
         RESULT *rp = earliest_deadline_result(RSC_TYPE_CPU);
-        if (!rp) break;
+        if (!rp) {
+            break;
+        }
         rp->already_selected = true;
-        if (have_max_concurrent && max_concurrent_exceeded(rp)) {
+        ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
+        if (!proc_rsc.can_schedule(rp, atp)) {
             continue;
         }
-        ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
-        if (!proc_rsc.can_schedule(rp, atp)) continue;
         proc_rsc.schedule(rp, atp, true);
         rp->project->rsc_pwf[0].deadlines_missed_copy--;
         rp->edf_scheduled = true;
@@ -1010,16 +1003,20 @@ void CLIENT_STATE::make_run_list(vector<RESULT*>& run_list) {
         if (!rp) {
             break;
         }
-        if (have_max_concurrent && max_concurrent_exceeded(rp)) {
+        rp->already_selected = true;
+        ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
+        if (!proc_rsc.can_schedule(rp, atp)) {
             continue;
         }
-        ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
-        if (!proc_rsc.can_schedule(rp, atp)) continue;
         proc_rsc.schedule(rp, atp, false);
         run_list.push_back(rp);
         if (have_max_concurrent) {
             max_concurrent_inc(rp);
         }
+    }
+
+    if (log_flags.cpu_sched_debug) {
+        msg_printf(0, MSG_INFO, "[cpu_sched_debug] make_run_list(): end");
     }
 }
 
