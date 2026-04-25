@@ -353,8 +353,7 @@ static inline bool finished_time_slice(ACTIVE_TASK* atp) {
 // Values are returned in project->next_runnable_result
 // (skip projects for which this is already non-NULL)
 //
-// Don't choose results with already_selected == true;
-// mark chosen results as already_selected.
+// Don't choose results with already_selected == true
 //
 // The preference order:
 // 1. results with active tasks that are running
@@ -420,7 +419,6 @@ RESULT* CLIENT_STATE::highest_prio_project_best_result() {
     double best_prio = 0;
     bool first = true;
 
-    msg_printf(0, MSG_INFO, "highest_prio_project_best_result()");
     for (PROJECT *p: projects) {
         if (!p->next_runnable_result) {
             continue;
@@ -436,7 +434,6 @@ RESULT* CLIENT_STATE::highest_prio_project_best_result() {
     }
 
     RESULT* rp = best_project->next_runnable_result;
-    rp->already_selected = true;
     best_project->next_runnable_result = 0;
     return rp;
 }
@@ -976,6 +973,9 @@ void CLIENT_STATE::make_run_list(vector<RESULT*>& run_list) {
             break;
         }
         rp->already_selected = true;
+        if (have_max_concurrent && max_concurrent_exceeded(rp)) {
+            continue;
+        }
         ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
         if (!proc_rsc.can_schedule(rp, atp)) {
             continue;
@@ -1004,6 +1004,9 @@ void CLIENT_STATE::make_run_list(vector<RESULT*>& run_list) {
             break;
         }
         rp->already_selected = true;
+        if (have_max_concurrent && max_concurrent_exceeded(rp)) {
+            continue;
+        }
         ACTIVE_TASK *atp = lookup_active_task_by_result(rp);
         if (!proc_rsc.can_schedule(rp, atp)) {
             continue;
