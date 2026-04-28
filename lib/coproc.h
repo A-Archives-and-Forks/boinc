@@ -150,14 +150,16 @@ struct PCI_INFO {
     int parse(XML_PARSER&);
 };
 
-
 // represents a set of identical coprocessors on a particular computer.
 // Abstract class;
 // objects will always be a derived class (COPROC_CUDA, COPROC_ATI)
 // Used in both client and server.
 //
 struct COPROC {
-    char type[256];     // must be unique
+    char type[256];
+        // for the 'big 4' types: NVIDIA, ATI, intel_gpu, apple_gpu
+        // for other OpenCL: the opencl model name
+        // why not vendor name?  A chip could have both GPU and NPU
     int count;          // how many are present
     bool non_gpu;       // coproc is not a GPU
     double peak_flops;
@@ -302,7 +304,7 @@ typedef int CUdevice;
 struct COPROC_NVIDIA : public COPROC {
     int cuda_version;  // CUDA runtime version
     int display_driver_version;
-    CUDA_DEVICE_PROP prop;
+    CUDA_DEVICE_PROP cuda_prop;
 
 #ifndef _USING_FCGI_
     void write_xml(MIOFILE&, bool scheduler_rpc);
@@ -357,9 +359,6 @@ struct COPROC_ATI : public COPROC {
 };
 
 struct COPROC_INTEL : public COPROC {
-    char name[256];
-    char version[50];
-
 #ifndef _USING_FCGI_
     void write_xml(MIOFILE&, bool scheduler_rpc);
 #endif

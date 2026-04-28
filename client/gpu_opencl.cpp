@@ -264,7 +264,7 @@ void COPROCS::get_opencl(
     char platform_version[256];
     char platform_vendor[256];
     char buf[256];
-    OPENCL_DEVICE_PROP prop;
+    OPENCL_DEVICE_PROP opencl_prop;
     int current_CUDA_index;
     int current_CAL_index;
     int min_CAL_target;
@@ -392,31 +392,33 @@ void COPROCS::get_opencl(
         }
 
         for (device_index=0; device_index<num_devices; ++device_index) {
-            prop.clear();
-            prop.device_id = devices[device_index];
+            opencl_prop.clear();
+            opencl_prop.device_id = devices[device_index];
             strlcpy(
-                prop.opencl_platform_version, platform_version,
-                sizeof(prop.opencl_platform_version)
+                opencl_prop.opencl_platform_version, platform_version,
+                sizeof(opencl_prop.opencl_platform_version)
             );
 
-            ciErrNum = get_opencl_info(prop, device_index, warnings);
+            ciErrNum = get_opencl_info(opencl_prop, device_index, warnings);
             if (ciErrNum != CL_SUCCESS) continue;
 
-            prop.is_used = COPROC_UNUSED;
-            prop.get_device_version_int();
+            opencl_prop.is_used = COPROC_UNUSED;
+            opencl_prop.get_device_version_int();
 
             OPENCL_CPU_PROP c;
             strlcpy(c.platform_vendor, platform_vendor, sizeof(c.platform_vendor));
-            c.opencl_prop = prop;
+            c.opencl_prop = opencl_prop;
             cpu_opencls.push_back(c);
         }
 
         //////////// GPUs and Accelerators //////////////
 
-// Looks like implementation of Qualcomm has some problems with clGetDeviceIDs
-// It returns CL_DEVICE_NOT_FOUND for CL_DEVICE_TYPE_GPU and CL_DEVICE_TYPE_ACCELERATOR combined
-// But it returns CL_SUCCESS when asking separately for CL_DEVICE_TYPE_GPU or CL_DEVICE_TYPE_ACCELERATOR
-// So we will ask for CL_DEVICE_TYPE_GPU and CL_DEVICE_TYPE_ACCELERATOR separately
+// implementation of Qualcomm has problems with clGetDeviceIDs
+// It returns CL_DEVICE_NOT_FOUND for CL_DEVICE_TYPE_GPU
+// and CL_DEVICE_TYPE_ACCELERATOR combined
+// But it returns CL_SUCCESS when asking separately
+// for CL_DEVICE_TYPE_GPU or CL_DEVICE_TYPE_ACCELERATOR
+// So ask for CL_DEVICE_TYPE_GPU and CL_DEVICE_TYPE_ACCELERATOR separately
 #ifdef ANDROID
         cl_device_id android_gpu[MAX_COPROC_INSTANCES];
         cl_uint num_android_gpu = 0;
@@ -513,33 +515,23 @@ void COPROCS::get_opencl(
         }
 
         for (device_index=0; device_index<num_devices; ++device_index) {
-            prop.clear();
-            prop.device_id = devices[device_index];
+            opencl_prop.clear();
+            opencl_prop.device_id = devices[device_index];
             strlcpy(
-                prop.opencl_platform_version, platform_version,
-                sizeof(prop.opencl_platform_version)
+                opencl_prop.opencl_platform_version,
+                platform_version,
+                sizeof(opencl_prop.opencl_platform_version)
             );
 
 //TODO: Should we store the platform(s) for each GPU found?
 //TODO: Must we check if multiple platforms found the same GPU and merge the records?
-            ciErrNum = get_opencl_info(prop, device_index, warnings);
+            ciErrNum = get_opencl_info(opencl_prop, device_index, warnings);
             if (ciErrNum != CL_SUCCESS) continue;
 
-// TODO: Eliminate this, or improve it
-#if TEST_OTHER_COPROC_LOGIC
-            if (is_NVIDIA(prop.vendor)) {
-                safe_strcpy(prop.vendor, "FAKE VENDOR X");
-            } else if (is_AMD(prop.vendor)) {
-                safe_strcpy(prop.vendor, "FAKE VENDOR Y");
-            } else {
-                safe_strcpy(prop.vendor, "FAKE VENDOR Z");
-            }
-#endif
+            opencl_prop.is_used = COPROC_UNUSED;
+            opencl_prop.get_device_version_int();
 
-            prop.is_used = COPROC_UNUSED;
-            prop.get_device_version_int();
-
-            if (is_NVIDIA(prop.vendor)) {
+            if (is_NVIDIA(opencl_prop.vendor)) {
                 //////////// NVIDIA //////////////
                 bool cuda_match_found = false;
                 if (nvidia.have_cuda) {
@@ -562,20 +554,20 @@ void COPROCS::get_opencl(
                             gpu_warning(warnings, buf);
                             // Newer versions of CUDA driver don't support older NVIDIA GPUs
                             if (nvidia.cuda_version >= 6050) {
-                                prop.device_num = (int)(nvidia_opencls.size());
+                                opencl_prop.device_num = (int)(nvidia_opencls.size());
                                 current_CUDA_index = saved_CUDA_index;
-                                prop.warn_bad_cuda = true;
+                                opencl_prop.warn_bad_cuda = true;
                                 break;
                             } else {
                                 // Older CUDA drivers should report all NVIDIA GPUs reported by OpenCL
                                 goto leave; // Should never happen
                             }
                         }
-                        if (!strcmp(prop.name,
-                            nvidia_gpus[devnums_pci_slot_sort[current_CUDA_index]].prop.name)
+                        if (!strcmp(opencl_prop.name,
+                            nvidia_gpus[devnums_pci_slot_sort[current_CUDA_index]].cuda_prop.name)
                             ) {
                             cuda_match_found = true;
-                            prop.device_num = devnums_pci_slot_sort[current_CUDA_index];
+                            opencl_prop.device_num = devnums_pci_slot_sort[current_CUDA_index];
                             break;  // We have a match
                         }
                         // This CUDA GPU is not recognized by OpenCL,
@@ -584,39 +576,41 @@ void COPROCS::get_opencl(
                         ++current_CUDA_index;
                     }
                 } else {
-                    prop.device_num = (int)(nvidia_opencls.size());
+                    opencl_prop.device_num = (int)(nvidia_opencls.size());
                 }
-                prop.opencl_device_index = device_index;
+                opencl_prop.opencl_device_index = device_index;
 
                 if (cuda_match_found) {
-                    prop.peak_flops = nvidia_gpus[prop.device_num].peak_flops;
+                    opencl_prop.peak_flops = nvidia_gpus[opencl_prop.device_num].peak_flops;
                 } else {
                     COPROC_NVIDIA c;
-                    c.opencl_prop = prop;
+                    c.opencl_prop = opencl_prop;
                     c.set_peak_flops();
                     if (c.bad_gpu_peak_flops("NVIDIA OpenCL", s)) {
                         gpu_warning(warnings, s.c_str());
                     }
-                    prop.peak_flops = c.peak_flops;
+                    opencl_prop.peak_flops = c.peak_flops;
                 }
                 if (cuda_match_found) {
                     // Assumes OpenCL device_num and CUDA device_num now match
                     //
-                    prop.opencl_available_ram = nvidia_gpus[prop.device_num].available_ram;
+                    opencl_prop.opencl_available_ram = nvidia_gpus[opencl_prop.device_num].available_ram;
                 } else {
-                    prop.opencl_available_ram = prop.global_mem_size;
+                    opencl_prop.opencl_available_ram = opencl_prop.global_mem_size;
                 }
 
                 // Build nvidia_opencls vector in device_num order
                 for (it=nvidia_opencls.begin(); it != nvidia_opencls.end(); ++it) {
-                    if (it->device_num > prop.device_num) break;
+                    if (it->device_num > opencl_prop.device_num) break;
                 }
-                nvidia_opencls.insert(it, prop);
+                nvidia_opencls.insert(it, opencl_prop);
 
-                if (cuda_match_found) ++current_CUDA_index;
-            } else if (is_AMD(prop.vendor)) {
+                if (cuda_match_found) {
+                    ++current_CUDA_index;
+                }
+            } else if (is_AMD(opencl_prop.vendor)) {
                 //////////// AMD / ATI //////////////
-                prop.opencl_device_index = device_index;
+                opencl_prop.opencl_device_index = device_index;
 
                 if (ati.have_cal) {
                     // AMD OpenCL does not recognize all AMD GPUs returned by
@@ -641,115 +635,114 @@ void COPROCS::get_opencl(
                         //
                         ++current_CAL_index;
                     }
-                    prop.device_num = current_CAL_index++;
+                    opencl_prop.device_num = current_CAL_index++;
 
                     // Always use GPU model name from CAL if
                     // available for ATI / AMD  GPUs because
                     // (we believe) it is more user-friendly.
                     //
-                    safe_strcpy(prop.name, ati_gpus[prop.device_num].name);
+                    safe_strcpy(opencl_prop.name,
+                        ati_gpus[opencl_prop.device_num].name
+                    );
 
                     // Work around a bug in OpenCL which returns only
                     // 1/2 of total global RAM size: use the value from CAL.
                     // This bug applies only to ATI GPUs, not to NVIDIA
                     // See also further workaround code for Macs.
                     //
-                    prop.global_mem_size = ati_gpus[prop.device_num].attribs.localRAM * MEGA;
-                    prop.peak_flops = ati_gpus[prop.device_num].peak_flops;
+                    opencl_prop.global_mem_size = ati_gpus[opencl_prop.device_num].attribs.localRAM * MEGA;
+                    opencl_prop.peak_flops = ati_gpus[opencl_prop.device_num].peak_flops;
                 } else {            // ! ati.have_cal
-                    prop.device_num = (int)(ati_opencls.size());
+                    opencl_prop.device_num = (int)(ati_opencls.size());
                     COPROC_ATI c;
-                    c.opencl_prop = prop;
+                    c.opencl_prop = opencl_prop;
                     c.set_peak_flops();
                     if (c.bad_gpu_peak_flops("AMD OpenCL", s)) {
                         gpu_warning(warnings, s.c_str());
                     }
-                    prop.peak_flops = c.peak_flops;
+                    opencl_prop.peak_flops = c.peak_flops;
                 }
 
                 if (ati_gpus.size()) {
-                    prop.opencl_available_ram = ati_gpus[prop.device_num].available_ram;
+                    opencl_prop.opencl_available_ram = ati_gpus[opencl_prop.device_num].available_ram;
                 } else {
-                    prop.opencl_available_ram = prop.global_mem_size;
+                    opencl_prop.opencl_available_ram = opencl_prop.global_mem_size;
                 }
-                ati_opencls.push_back(prop);
-            } else if (is_intel(prop.vendor)) {
+                ati_opencls.push_back(opencl_prop);
+            } else if (is_intel(opencl_prop.vendor)) {
                 //////////// INTEL GPU //////////////
-                prop.device_num = (int)(intel_gpu_opencls.size());
-                prop.opencl_device_index = device_index;
+                opencl_prop.device_num = (int)(intel_gpu_opencls.size());
+                opencl_prop.opencl_device_index = device_index;
 
                 COPROC_INTEL c;
-                c.opencl_prop = prop;
+                c.opencl_prop = opencl_prop;
                 c.is_used = COPROC_UNUSED;
-                c.available_ram = prop.global_mem_size;
-                safe_strcpy(c.name, prop.name);
-                safe_strcpy(c.version, prop.opencl_driver_version);
+                c.available_ram = opencl_prop.global_mem_size;
 
                 c.set_peak_flops();
                 if (c.bad_gpu_peak_flops("Intel OpenCL", s)) {
                     gpu_warning(warnings, s.c_str());
                 }
-                prop.peak_flops = c.peak_flops;
-                prop.opencl_available_ram = prop.global_mem_size;
+                opencl_prop.peak_flops = c.peak_flops;
+                opencl_prop.opencl_available_ram = opencl_prop.global_mem_size;
 
-                intel_gpu_opencls.push_back(prop);
-
-                // At present Intel GPUs only support OpenCL
-                // and do not have a native GPGPU framework,
-                // so treat each detected GPU as a native device.
-                //
+                intel_gpu_opencls.push_back(opencl_prop);
                 intel_gpus.push_back(c);
 #ifdef __APPLE__
             } else if (is_apple(prop.vendor)) {
                 //////////// APPLE GPU //////////////
-                prop.device_num = (int)(apple_gpu_opencls.size());
-                prop.opencl_device_index = device_index;
+                opencl_prop.device_num = (int)(apple_gpu_opencls.size());
+                opencl_prop.opencl_device_index = device_index;
 
                 COPROC_APPLE c;
-                c.opencl_prop = prop;
+                c.opencl_prop = opencl_prop;
                 c.is_used = COPROC_UNUSED;
-                c.available_ram = prop.global_mem_size;
+                c.available_ram = opencl_prop.global_mem_size;
 
                 c.set_peak_flops();
                 if (c.bad_gpu_peak_flops("Apple OpenCL", s)) {
                     gpu_warning(warnings, s.c_str());
                 }
-                prop.peak_flops = c.peak_flops;
-                prop.opencl_available_ram = prop.global_mem_size;
+                opencl_prop.peak_flops = c.peak_flops;
+                opencl_prop.opencl_available_ram = opencl_prop.global_mem_size;
 
-                apple_gpu_opencls.push_back(prop);
+                apple_gpu_opencls.push_back(opencl_prop);
 #endif
             } else {
                 //////////// OTHER GPU OR ACCELERATOR //////////////
-                // Put each coprocessor instance into a separate other_opencls element
-
-                // opencl_device_index is passed to project apps via init_data.xml
-                // to differentiate among OpenCL devices from the same vendor. It is
-                // used by boinc_get_opencl_ids() to select the correct OpenCL device.
+                // Put each coprocessor instance into a separate
+                // other_opencls element
+                // opencl_device_index is passed to project apps
+                // via init_data.xml to differentiate among OpenCL devices
+                // from the same vendor.
+                // It is used by boinc_get_opencl_ids() to select
+                // the correct OpenCL device.
+                //
                 int opencl_device_index = 0;
                 for (unsigned int coproc_index=0; coproc_index<other_opencls.size(); coproc_index++) {
-                    if (!strcmp(other_opencls[coproc_index].vendor, prop.vendor)) {
-                        opencl_device_index++;  // Another OpenCL device from same vendor
+                    if (!strcmp(other_opencls[coproc_index].vendor, opencl_prop.vendor)) {
+                        opencl_device_index++;
+                            // Another OpenCL device from same vendor
                     }
                 }
 
-                prop.device_num = 0;    // Each vector entry has only one device
-                prop.opencl_device_index = opencl_device_index;
-                prop.opencl_available_ram = prop.global_mem_size;
-                prop.is_used = COPROC_USED;
+                opencl_prop.device_num = 0;    // Each vector entry has only one device
+                opencl_prop.opencl_device_index = opencl_device_index;
+                opencl_prop.opencl_available_ram = opencl_prop.global_mem_size;
+                opencl_prop.is_used = COPROC_USED;
 
                 // TODO: is there a better way to estimate peak_flops?
                 //
-                prop.peak_flops = 0;
+                opencl_prop.peak_flops = 0;
 
                 double freq;
-                if (prop.max_clock_frequency == 1) {
+                if (opencl_prop.max_clock_frequency == 1) {
                     // Adreno reports 1MHz, which is not correct.
                     // Actual rate could be 155 MHz to 1.5 GHz;
                     // split the difference.
                     freq = 1e9;
                 } else {
-                    freq = ((double)prop.max_clock_frequency) * 1e6;
+                    freq = ((double)opencl_prop.max_clock_frequency) * 1e6;
                 }
 
                 // OpenCL doesn't tell us this critical parameter;
@@ -760,24 +753,24 @@ void COPROCS::get_opencl(
 
                 // other manufacturers
                 //
-                if (strcasestr(prop.vendor, "QUALCOMM")) {
+                if (strcasestr(opencl_prop.vendor, "QUALCOMM")) {
                     // can be 32 to 256; most are 128
                     alus_per_compute_unit = 128;
                 }
 
-                prop.peak_flops = freq * prop.max_compute_units * alus_per_compute_unit;
-                if (prop.peak_flops <= 0 || prop.peak_flops > GPU_MAX_PEAK_FLOPS) {
+                opencl_prop.peak_flops = freq * opencl_prop.max_compute_units * alus_per_compute_unit;
+                if (opencl_prop.peak_flops <= 0 || opencl_prop.peak_flops > GPU_MAX_PEAK_FLOPS) {
                     char buf2[256];
                     snprintf(buf2, sizeof(buf2),
                         "OpenCL generic: bad peak FLOPS; Max units %u, max freq %u MHz ALUs per CU %d",
-                        prop.max_compute_units, prop.max_clock_frequency,
+                        opencl_prop.max_compute_units, opencl_prop.max_clock_frequency,
                         alus_per_compute_unit
                     );
                     gpu_warning(warnings, buf2);
-                    prop.peak_flops = GPU_DEFAULT_PEAK_FLOPS;
+                    opencl_prop.peak_flops = GPU_DEFAULT_PEAK_FLOPS;
                 }
 
-                other_opencls.push_back(prop);
+                other_opencls.push_back(opencl_prop);
             }
         }
     }
@@ -838,10 +831,10 @@ void COPROCS::correlate_opencl(
             nvidia.find_best_opencls(
                 use_all, nvidia_opencls, ignore_gpu_instance[PROC_TYPE_NVIDIA_GPU]
             );
-            nvidia.prop.totalGlobalMem = nvidia.opencl_prop.global_mem_size;
+            nvidia.cuda_prop.totalGlobalMem = nvidia.opencl_prop.global_mem_size;
             nvidia.available_ram = nvidia.opencl_prop.global_mem_size;
-            nvidia.prop.clockRate = nvidia.opencl_prop.max_clock_frequency * 1000;
-            safe_strcpy(nvidia.prop.name, nvidia.opencl_prop.name);
+            nvidia.cuda_prop.clockRate = nvidia.opencl_prop.max_clock_frequency * 1000;
+            safe_strcpy(nvidia.cuda_prop.name, nvidia.opencl_prop.name);
         }
     }
 
@@ -863,7 +856,6 @@ void COPROCS::correlate_opencl(
             ignore_gpu_instance[PROC_TYPE_INTEL_GPU]
         );
         intel_gpu.available_ram = intel_gpu.opencl_prop.global_mem_size;
-        safe_strcpy(intel_gpu.name, intel_gpu.opencl_prop.name);
     }
 #ifdef __APPLE__
     if (apple_gpu_opencls.size() > 0) {

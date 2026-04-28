@@ -777,7 +777,7 @@ bool PLAN_CLASS_SPEC::check(
             gpu_requirements[PROC_TYPE_NVIDIA_GPU].update(abs(min_driver_version), 0);
         }
         // compute capability
-        int v = (cp.prop.major)*100 + cp.prop.minor;
+        int v = (cp.cuda_prop.major)*100 + cp.cuda_prop.minor;
         if (min_nvidia_compcap && min_nvidia_compcap > v) {
             if (config.debug_version_select) {
                 log_messages.printf(MSG_NORMAL,
@@ -817,7 +817,7 @@ bool PLAN_CLASS_SPEC::check(
                 return false;
             }
         }
-        gpu_ram = cp.prop.totalGlobalMem;
+        gpu_ram = cp.cuda_prop.totalGlobalMem;
         if (cp.bad_gpu_peak_flops("NVIDIA", msg)) {
             log_messages.printf(MSG_NORMAL, "%s\n", msg.c_str());
         }
