@@ -199,12 +199,6 @@ void COPROCS::detect_gpus(vector<string> &warnings) {
         gpu_warning(warnings, "Caught SIGSEGV in ATI GPU detection");
     }
     try {
-        intel_gpu.get(warnings);
-    }
-    catch (...) {
-        gpu_warning(warnings, "Caught SIGSEGV in INTEL GPU detection");
-    }
-    try {
         // OpenCL detection must come last
         get_opencl(warnings);
     }
@@ -230,11 +224,6 @@ void COPROCS::detect_gpus(vector<string> &warnings) {
 #else
     apple_gpu.get(warnings);
 #endif
-    if (setjmp(resume)) {
-        gpu_warning(warnings, "Caught SIGSEGV in INTEL GPU detection");
-    } else {
-        intel_gpu.get(warnings);
-    }
     if (setjmp(resume)) {
         gpu_warning(warnings, "Caught SIGSEGV in OpenCL detection");
     } else {
@@ -264,7 +253,6 @@ void COPROCS::correlate_gpus(
     nvidia.correlate(use_all, ignore_gpu_instance[PROC_TYPE_NVIDIA_GPU]);
 #endif
     ati.correlate(use_all, ignore_gpu_instance[PROC_TYPE_AMD_GPU]);
-    intel_gpu.correlate(use_all, ignore_gpu_instance[PROC_TYPE_INTEL_GPU]);
 #ifdef __APPLE__
     apple_gpu.correlate(use_all, ignore_gpu_instance[PROC_TYPE_APPLE_GPU]);
 #endif

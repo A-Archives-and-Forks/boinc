@@ -364,8 +364,6 @@ struct COPROC_INTEL : public COPROC {
 #endif
     COPROC_INTEL(int): COPROC() {}
     COPROC_INTEL(): COPROC() {clear();}
-    void get(std::vector<std::string>& ) {};
-    void correlate(bool , std::vector<int>& ) {};
     void clear();
     int parse(XML_PARSER&);
     void set_peak_flops();
