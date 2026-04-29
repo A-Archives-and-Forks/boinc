@@ -689,7 +689,7 @@ void COPROCS::get_opencl(
                 intel_gpu_opencls.push_back(opencl_prop);
                 intel_gpus.push_back(c);
 #ifdef __APPLE__
-            } else if (is_apple(prop.vendor)) {
+            } else if (is_apple(opencl_prop.vendor)) {
                 //////////// APPLE GPU //////////////
                 opencl_prop.device_num = (int)(apple_gpu_opencls.size());
                 opencl_prop.opencl_device_index = device_index;
