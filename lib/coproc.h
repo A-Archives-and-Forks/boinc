@@ -439,9 +439,6 @@ struct COPROCS {
     int read_coproc_info_file(std::vector<std::string> &warnings);
     int add_other_coproc_types();
 
-#ifdef __APPLE__
-    void opencl_get_ati_mem_size_from_opengl(std::vector<std::string> &warnings);
-#endif
     void summary_string_json(std::string& out);
 
     // Copy a coproc set, possibly setting usage to zero.

@@ -289,10 +289,11 @@ void COPROCS::correlate_gpus(
 
 #ifdef __APPLE__
             if ((nvidia_gpus[i].cuda_version >= 6050) &&
-                            nvidia_gpus[i].prop.major < 2) {
+                nvidia_gpus[i].cuda_prop.major < 2
+            ) {
                 // This will be called only if CUDA recognized and reported the GPU
                 msg_printf(NULL, MSG_USER_ALERT, "NVIDIA GPU %d: %s %s",
-                    nvidia_gpus[i].device_num, nvidia_gpus[i].prop.name,
+                    nvidia_gpus[i].device_num, nvidia_gpus[i].cuda_prop.name,
                     _("cannot be used for CUDA or OpenCL computation with CUDA driver 6.5 or later")
                 );
             }
