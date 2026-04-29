@@ -901,7 +901,7 @@ bool PLAN_CLASS_SPEC::check(
     if (cpp) {
         if (config.debug_version_select) {
             log_messages.printf(MSG_NORMAL,
-                "[version] plan_class_spec: OpenCL coproc %s found\n", gpu_type
+                "[version] plan_class_spec: OpenCL coproc %s found\n", cpp->type
             );
         }
         if (cpp->bad_gpu_peak_flops("OpenCL coproc", msg)) {
@@ -951,7 +951,7 @@ bool PLAN_CLASS_SPEC::check(
 
     // general GPU
     //
-    if (strlen(gpu_type)) {
+    if (cpp) {
 
         // GPU RAM
         //
@@ -1045,10 +1045,10 @@ bool PLAN_CLASS_SPEC::check(
         } else if (!strcmp(gpu_type, "nvidia")) {
             hu.proc_type = PROC_TYPE_NVIDIA_GPU;
             hu.gpu_usage = gpu_usage;
-        } else if (strstr(gpu_type, "intel")==gpu_type) {
+        } else if (strstr(gpu_type, "intel") == gpu_type) {
             hu.proc_type = PROC_TYPE_INTEL_GPU;
             hu.gpu_usage = gpu_usage;
-        } else if (strstr(gpu_type, "apple_gpu")==gpu_type) {
+        } else if (strstr(gpu_type, "apple_gpu") == gpu_type) {
             hu.proc_type = PROC_TYPE_APPLE_GPU;
             hu.gpu_usage = gpu_usage;
         } else {
