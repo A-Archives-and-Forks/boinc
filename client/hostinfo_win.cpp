@@ -1670,6 +1670,7 @@ int HOST_INFO::get_host_info(bool init) {
     // apparently if WSL is not present, querying for it pops up an alert.
     // Avoid this if WSL disabled in config
     //
+    wsl_distros.clear();
     if (!cc_config.dont_use_wsl) {
         OSVERSIONINFOEX osvi;
         if (get_OSVERSIONINFO(osvi) && osvi.dwMajorVersion >= 10) {
