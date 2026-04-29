@@ -239,8 +239,8 @@ void COPROCS::summary_string_json(string &out) {
         if (!strlen(cp.opencl_prop.name)) continue;
         if (!out.empty()) out += ",\n";
         summary_json(buf2,
-            "opencl",
-            cp.type,
+            cp.opencl_prop.vendor,
+            cp.opencl_prop.name,
             cp.count,
             (int)((double)cp.opencl_prop.global_mem_size/MEGA),
             cp.opencl_prop.opencl_device_version,
